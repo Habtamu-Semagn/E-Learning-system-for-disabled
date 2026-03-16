@@ -8,42 +8,67 @@ const checkRole = require('../middleware/roleCheck');
 // Get all courses
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { category, difficulty, teacherId, status } = req.query;
-    let query = `SELECT c.*, u.full_name as teacher_name,
-                 (SELECT COUNT(*) FROM course_enrollments WHERE course_id = c.id) as enrollment_count
-                 FROM courses c
-                 LEFT JOIN users u ON c.teacher_id = u.id
-                 WHERE 1=1`;
+    const { category, difficulty, teacherId, status, page, limit: limitParam } = req.query;
     const params = [];
+    let where = 'WHERE 1=1';
 
     // Students can only see published courses
     if (req.user.role === 'student') {
-      query += ` AND c.status = 'published'`;
+      where += ` AND c.status = 'published'`;
     }
 
     if (category) {
       params.push(category);
-      query += ` AND c.category = $${params.length}`;
+      where += ` AND c.category = $${params.length}`;
     }
 
     if (difficulty) {
       params.push(difficulty);
-      query += ` AND c.difficulty_level = $${params.length}`;
+      where += ` AND c.difficulty_level = $${params.length}`;
     }
 
     if (teacherId) {
       params.push(teacherId);
-      query += ` AND c.teacher_id = $${params.length}`;
+      where += ` AND c.teacher_id = $${params.length}`;
     }
 
     if (status && req.user.role !== 'student') {
       params.push(status);
-      query += ` AND c.status = $${params.length}`;
+      where += ` AND c.status = $${params.length}`;
     }
 
-    query += ' ORDER BY c.created_at DESC';
+    const baseQuery = `SELECT c.*, u.full_name as teacher_name,
+                 (SELECT COUNT(*) FROM course_enrollments WHERE course_id = c.id) as enrollment_count,
+                 (SELECT COUNT(*) FROM lessons WHERE course_id = c.id) as lessons_count
+                 FROM courses c
+                 LEFT JOIN users u ON c.teacher_id = u.id
+                 ${where} ORDER BY c.created_at DESC`;
 
-    const result = await pool.query(query, params);
+    // Pagination (only when page param is provided)
+    if (page) {
+      const pageNum = Math.max(1, parseInt(page) || 1);
+      const limit = Math.min(parseInt(limitParam) || 20, 100);
+      const offset = (pageNum - 1) * limit;
+
+      const countResult = await pool.query(
+        `SELECT COUNT(*) FROM courses c ${where}`,
+        params
+      );
+      const total = parseInt(countResult.rows[0].count);
+
+      params.push(limit, offset);
+      const result = await pool.query(
+        `${baseQuery} LIMIT $${params.length - 1} OFFSET $${params.length}`,
+        params
+      );
+
+      return res.json({
+        data: result.rows,
+        pagination: { total, page: pageNum, limit, totalPages: Math.ceil(total / limit) },
+      });
+    }
+
+    const result = await pool.query(baseQuery, params);
     res.json(result.rows);
   } catch (error) {
     console.error('Get courses error:', error);
@@ -58,7 +83,8 @@ router.get('/:id', authenticateToken, async (req, res) => {
 
     const courseResult = await pool.query(
       `SELECT c.*, u.full_name as teacher_name,
-       (SELECT COUNT(*) FROM course_enrollments WHERE course_id = c.id) as enrollment_count
+       (SELECT COUNT(*) FROM course_enrollments WHERE course_id = c.id) as enrollment_count,
+       (SELECT COUNT(*) FROM lessons WHERE course_id = c.id) as lessons_count
        FROM courses c
        LEFT JOIN users u ON c.teacher_id = u.id
        WHERE c.id = $1`,
@@ -76,15 +102,12 @@ router.get('/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Course not available' });
     }
 
-    // Get lessons
     const lessonsResult = await pool.query(
       'SELECT * FROM lessons WHERE course_id = $1 ORDER BY order_index ASC',
       [id]
     );
-
     course.lessons = lessonsResult.rows;
 
-    // If student, check enrollment status
     if (req.user.role === 'student') {
       const enrollmentResult = await pool.query(
         'SELECT * FROM course_enrollments WHERE student_id = $1 AND course_id = $2',
@@ -148,12 +171,8 @@ router.put('/:id', authenticateToken, checkRole('teacher', 'admin'), [
     const { id } = req.params;
     const { title, description, category, difficultyLevel, thumbnailUrl, status } = req.body;
 
-    // Check ownership for teachers
     if (req.user.role === 'teacher') {
-      const ownerCheck = await pool.query(
-        'SELECT teacher_id FROM courses WHERE id = $1',
-        [id]
-      );
+      const ownerCheck = await pool.query('SELECT teacher_id FROM courses WHERE id = $1', [id]);
       if (ownerCheck.rows.length === 0 || ownerCheck.rows[0].teacher_id !== req.user.id) {
         return res.status(403).json({ error: 'Access denied' });
       }
@@ -189,12 +208,8 @@ router.delete('/:id', authenticateToken, checkRole('teacher', 'admin'), async (r
   try {
     const { id } = req.params;
 
-    // Check ownership for teachers
     if (req.user.role === 'teacher') {
-      const ownerCheck = await pool.query(
-        'SELECT teacher_id FROM courses WHERE id = $1',
-        [id]
-      );
+      const ownerCheck = await pool.query('SELECT teacher_id FROM courses WHERE id = $1', [id]);
       if (ownerCheck.rows.length === 0 || ownerCheck.rows[0].teacher_id !== req.user.id) {
         return res.status(403).json({ error: 'Access denied' });
       }

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/dashboard-layout-new';
 import { useCommonShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { useAuth } from '@/lib/auth-context';
+import { RouteGuard } from '@/lib/route-guard';
 import { usersAPI, coursesAPI, systemAPI } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -85,20 +86,33 @@ export default function AdminDashboard() {
       setLoading(true);
       setError('');
 
-      // Fetch stats, users and courses in parallel
-      const [statsResponse, usersData, coursesData] = await Promise.all([
-        systemAPI.getStats(),
+      // Fetch users and courses in parallel; stats endpoint is optional
+      const [usersData, coursesData] = await Promise.all([
         usersAPI.getAll(),
         coursesAPI.getAll()
       ]);
 
-      // Update statistics
-      setStats({
-        totalUsers: statsResponse.totalUsers,
-        totalCourses: statsResponse.totalCourses,
-        activeStudents: statsResponse.activeStudents,
-        platformGrowth: statsResponse.platformGrowth
-      });
+      // Try to get stats from dedicated endpoint, fall back to deriving from data
+      let statsData = {
+        totalUsers: usersData.length,
+        totalCourses: coursesData.length,
+        activeStudents: usersData.filter((u: any) => u.role === 'student' && u.approval_status === 'approved').length,
+        platformGrowth: '+0%'
+      };
+
+      try {
+        const statsResponse = await systemAPI.getStats();
+        statsData = {
+          totalUsers: statsResponse.totalUsers ?? statsData.totalUsers,
+          totalCourses: statsResponse.totalCourses ?? statsData.totalCourses,
+          activeStudents: statsResponse.activeStudents ?? statsData.activeStudents,
+          platformGrowth: statsResponse.platformGrowth ?? statsData.platformGrowth
+        };
+      } catch (statsErr) {
+        console.warn('Stats endpoint unavailable, using derived stats:', statsErr);
+      }
+
+      setStats(statsData);
 
       // Set recent users (last 5)
       const sortedUsers = [...usersData].sort((a: any, b: any) =>
@@ -120,14 +134,15 @@ export default function AdminDashboard() {
       setRecentCourses(sortedCourses.slice(0, 4).map((c: any) => ({
         id: c.id,
         title: c.title,
-        instructor: c.instructor || 'Unknown',
-        students: c.students || 0,
-        totalStudents: c.students || 0,
-        lessons: c.lessons || 0,
-        totalLessons: c.lessons || 0,
-        duration: c.duration,
+        instructor: c.teacher_name || c.instructor || 'Unknown',
+        students: parseInt(c.enrollment_count) || c.students || 0,
+        totalStudents: parseInt(c.enrollment_count) || c.students || 0,
+        lessons: parseInt(c.lessons_count) || 0,
+        totalLessons: parseInt(c.lessons_count) || 0,
+        duration: c.duration || '',
         category: c.category,
-        status: c.status.charAt(0).toUpperCase() + c.status.slice(1),
+        // Keep raw backend status for API calls; display label derived in render
+        status: c.status,
         created: new Date(c.created_at).toISOString().split('T')[0],
         description: c.description
       })));
@@ -174,6 +189,7 @@ export default function AdminDashboard() {
   ];
 
   return (
+    <RouteGuard allowedRoles={['admin']}>
     <DashboardLayout role="admin" userName={user?.full_name || "Admin User"} userRole="Administrator">
       <div className="space-y-6">
         {/* Header */}
@@ -354,8 +370,8 @@ export default function AdminDashboard() {
                           <TableCell>{course.instructor}</TableCell>
                           <TableCell>{course.students}</TableCell>
                           <TableCell>
-                            <Badge variant={course.status === 'Active' ? 'default' : 'secondary'}>
-                              {course.status}
+                            <Badge variant={course.status === 'published' ? 'default' : 'secondary'}>
+                              {course.status.charAt(0).toUpperCase() + course.status.slice(1)}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
@@ -448,5 +464,6 @@ export default function AdminDashboard() {
         description={`Are you sure you want to delete "${deletingCourse?.title}"? This action cannot be undone.`}
       />
     </DashboardLayout>
+    </RouteGuard>
   );
 }

@@ -3,6 +3,7 @@
 import { use, useState } from 'react';
 import { DashboardLayout } from '@/components/dashboard-layout-new';
 import { useCommonShortcuts } from '@/hooks/use-keyboard-shortcuts';
+import { RouteGuard } from '@/lib/route-guard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -127,6 +128,7 @@ export default function AdminUserDetailPage({ params }: { params: Promise<{ id: 
   );
 
   return (
+    <RouteGuard allowedRoles={['admin']}>
     <DashboardLayout role="admin" userName="Admin User" userRole="Administrator">
       <div className="space-y-6">
         {/* Header with Back Button */}
@@ -371,5 +373,6 @@ export default function AdminUserDetailPage({ params }: { params: Promise<{ id: 
         description={`Are you sure you want to delete ${user.name}? This action cannot be undone and will remove all enrollment data and progress for this user.`}
       />
     </DashboardLayout>
+    </RouteGuard>
   );
 }

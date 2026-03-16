@@ -25,10 +25,13 @@ import {
 import { Plus, Loader2 } from 'lucide-react';
 
 interface AddCourseDialogProps {
+  /** Called with the newly created course object after a successful create */
+  onCourseCreated?: (course: any) => void;
+  /** Legacy callback - called after successful create (no course data) */
   onSuccess?: () => void;
 }
 
-export function AddCourseDialog({ onSuccess }: AddCourseDialogProps) {
+export function AddCourseDialog({ onCourseCreated, onSuccess }: AddCourseDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -45,7 +48,7 @@ export function AddCourseDialog({ onSuccess }: AddCourseDialogProps) {
     setError('');
 
     try {
-      await coursesAPI.create(formData);
+      const created = await coursesAPI.create(formData);
       setOpen(false);
       setFormData({
         title: '',
@@ -53,6 +56,7 @@ export function AddCourseDialog({ onSuccess }: AddCourseDialogProps) {
         category: '',
         difficultyLevel: 'beginner'
       });
+      if (onCourseCreated) onCourseCreated(created);
       if (onSuccess) onSuccess();
     } catch (err: any) {
       console.error('Failed to create course:', err);

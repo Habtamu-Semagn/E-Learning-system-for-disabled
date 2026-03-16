@@ -16,7 +16,8 @@ router.get('/student/:studentId', authenticateToken, async (req, res) => {
 
     const result = await pool.query(
       `SELECT e.*, c.title, c.description, c.thumbnail_url, c.category, c.difficulty_level,
-       u.full_name as teacher_name
+       u.full_name as teacher_name,
+       (SELECT COUNT(*) FROM lessons WHERE course_id = c.id) as total_lessons
        FROM course_enrollments e
        JOIN courses c ON e.course_id = c.id
        LEFT JOIN users u ON c.teacher_id = u.id

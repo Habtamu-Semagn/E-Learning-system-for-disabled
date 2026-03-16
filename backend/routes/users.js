@@ -9,23 +9,47 @@ const checkRole = require('../middleware/roleCheck');
 // Get all users (Admin only)
 router.get('/', authenticateToken, checkRole('admin'), async (req, res) => {
   try {
-    const { role, search } = req.query;
-    let query = 'SELECT id, email, role, full_name, school_id, disability_type, approval_status, department, created_at FROM users WHERE 1=1';
+    const { role, search, page, limit: limitParam } = req.query;
     const params = [];
+    let where = 'WHERE 1=1';
 
     if (role) {
       params.push(role);
-      query += ` AND role = $${params.length}`;
+      where += ` AND role = $${params.length}`;
     }
 
     if (search) {
       params.push(`%${search}%`);
-      query += ` AND (full_name ILIKE $${params.length} OR email ILIKE $${params.length})`;
+      where += ` AND (full_name ILIKE $${params.length} OR email ILIKE $${params.length})`;
     }
 
-    query += ' ORDER BY created_at DESC';
+    const baseQuery = `SELECT id, email, role, full_name, school_id, disability_type, approval_status, department, created_at FROM users ${where} ORDER BY created_at DESC`;
 
-    const result = await pool.query(query, params);
+    // Pagination (only when page param is provided)
+    if (page) {
+      const pageNum = Math.max(1, parseInt(page) || 1);
+      const limit = Math.min(parseInt(limitParam) || 20, 100);
+      const offset = (pageNum - 1) * limit;
+
+      const countResult = await pool.query(
+        `SELECT COUNT(*) FROM users ${where}`,
+        params
+      );
+      const total = parseInt(countResult.rows[0].count);
+
+      params.push(limit, offset);
+      const result = await pool.query(
+        `${baseQuery} LIMIT $${params.length - 1} OFFSET $${params.length}`,
+        params
+      );
+
+      return res.json({
+        data: result.rows,
+        pagination: { total, page: pageNum, limit, totalPages: Math.ceil(total / limit) },
+      });
+    }
+
+    const result = await pool.query(baseQuery, params);
     res.json(result.rows);
   } catch (error) {
     console.error('Get users error:', error);
@@ -74,13 +98,11 @@ router.post('/', authenticateToken, checkRole('admin'), [
   const { email, password, role, fullName, schoolId, disabilityType, department, bio } = req.body;
 
   try {
-    // Check if user exists
     const userCheck = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     if (userCheck.rows.length > 0) {
       return res.status(400).json({ error: 'Email already registered' });
     }
 
-    // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
     let query, params;
@@ -129,21 +151,18 @@ router.put('/:id', authenticateToken, [
   try {
     const { id } = req.params;
 
-    // Users can update their own profile, admins can update any profile
     if (req.user.role !== 'admin' && req.user.id !== parseInt(id)) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
     const { fullName, department, bio, phone, profilePictureUrl, currentPassword, newPassword } = req.body;
 
-    // Handle password change
     let passwordHash = null;
     if (newPassword) {
       if (!currentPassword) {
         return res.status(400).json({ error: 'Current password is required to set a new password' });
       }
 
-      // Fetch the current password hash
       const userResult = await pool.query('SELECT password_hash FROM users WHERE id = $1', [id]);
       if (userResult.rows.length === 0) {
         return res.status(404).json({ error: 'User not found' });

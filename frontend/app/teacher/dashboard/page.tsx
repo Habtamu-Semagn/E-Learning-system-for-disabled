@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { systemAPI, coursesAPI, getStoredUser } from '@/lib/api';
+import { coursesAPI } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
+import { RouteGuard } from '@/lib/route-guard';
 import { DashboardLayout } from '@/components/dashboard-layout-new';
 import { KeyboardShortcutsHelp } from '@/components/keyboard-shortcuts-help';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,71 +31,92 @@ interface Course {
   id: number;
   title: string;
   instructor: string;
-  students?: number;
+  students: number;
   totalStudents: number;
-  lessons?: number;
+  lessons: number;
   totalLessons: number;
   duration: string;
   category: string;
   status: string;
   created: string;
   description: string;
-  completion?: number;
+  completion: number;
+}
+
+interface Stats {
+  totalCourses: number;
+  totalStudents: number;
+  uploadedLessons: number;
+  avgCompletion: string;
 }
 
 export default function TeacherDashboard() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const { user } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [stats, setStats] = useState([
-    { title: 'Total Courses', value: '0', icon: BookOpen, color: 'blue' },
-    { title: 'Total Students', value: '0', icon: Users, color: 'green' },
-    { title: 'Uploaded Lessons', value: '0', icon: Upload, color: 'purple' },
-    { title: 'Avg. Completion', value: '0%', icon: TrendingUp, color: 'orange' },
-  ]);
+  const [stats, setStats] = useState<Stats>({
+    totalCourses: 0,
+    totalStudents: 0,
+    uploadedLessons: 0,
+    avgCompletion: '0%',
+  });
 
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [deletingCourse, setDeletingCourse] = useState<Course | null>(null);
+  const [processingId, setProcessingId] = useState<number | null>(null);
 
-  useEffect(() => {
-    const storedUser = getStoredUser();
-    setUser(storedUser);
-    fetchDashboardData();
-  }, []);
-
-  const fetchDashboardData = async () => {
+  // Fetch teacher's courses filtered by teacher_id from auth context
+  const fetchDashboardData = async (teacherId: number) => {
     try {
       setLoading(true);
       setError('');
-      const [statsData, coursesData] = await Promise.all([
-        systemAPI.getTeacherStats(),
-        coursesAPI.getTeacherCourses()
-      ]);
 
-      setStats([
-        { title: 'Total Courses', value: statsData.totalCourses.toString(), icon: BookOpen, color: 'blue' },
-        { title: 'Total Students', value: statsData.totalStudents.toString(), icon: Users, color: 'green' },
-        { title: 'Uploaded Lessons', value: statsData.totalLessons.toString(), icon: Upload, color: 'purple' },
-        { title: 'Avg. Completion', value: statsData.avgCompletion, icon: TrendingUp, color: 'orange' },
-      ]);
+      // Task 7.1: Fetch teacher's courses filtered by teacher_id
+      const coursesData = await coursesAPI.getAll({ teacherId });
 
-      setCourses(coursesData.map((c: any) => ({
+      // Task 7.2: Calculate statistics from courses data
+      const totalCourses = coursesData.length;
+      const totalStudents = coursesData.reduce(
+        (sum: number, c: any) => sum + (parseInt(c.enrollment_count) || 0),
+        0
+      );
+
+      // Map courses to local shape
+      const mappedCourses: Course[] = coursesData.map((c: any) => ({
         id: c.id,
         title: c.title,
-        students: c.enrollment_count || 0,
-        totalStudents: c.enrollment_count || 0,
-        lessons: c.lesson_count || 0,
-        totalLessons: c.lesson_count || 0,
-        completion: Math.round(c.avg_progress || 0),
-        instructor: c.teacher_name,
-        description: c.description,
+        instructor: c.teacher_name || '',
+        students: parseInt(c.enrollment_count) || 0,
+        totalStudents: parseInt(c.enrollment_count) || 0,
+        lessons: parseInt(c.lessons_count) || 0,
+        totalLessons: parseInt(c.lessons_count) || 0,
+        completion: Math.round(parseFloat(c.avg_progress) || 0),
+        description: c.description || '',
         duration: c.duration || '',
-        category: c.category,
-        created: c.created_at,
-        status: c.status
-      })));
+        category: c.category || '',
+        created: c.created_at || '',
+        status: c.status || 'draft',
+      }));
+
+      setCourses(mappedCourses);
+
+      // Calculate avg completion from courses data
+      const avgCompletion =
+        mappedCourses.length > 0
+          ? Math.round(
+              mappedCourses.reduce((sum, c) => sum + c.completion, 0) /
+                mappedCourses.length
+            )
+          : 0;
+
+      setStats({
+        totalCourses,
+        totalStudents,
+        uploadedLessons: mappedCourses.reduce((sum, c) => sum + c.lessons, 0),
+        avgCompletion: `${avgCompletion}%`,
+      });
     } catch (err: any) {
       console.error('Failed to fetch teacher dashboard data:', err);
       setError(err.message || 'Failed to load dashboard data');
@@ -102,23 +125,45 @@ export default function TeacherDashboard() {
     }
   };
 
-  const handleEditCourse = async (updatedCourse: Course) => {
-    try {
-      await coursesAPI.update(updatedCourse.id, updatedCourse);
-      setCourses(courses.map(c => c.id === updatedCourse.id ? updatedCourse : c));
-    } catch (err: any) {
-      console.error('Failed to update course:', err);
-      alert('Failed to update course: ' + err.message);
+  // Task 7.1: Trigger fetch when user id is available from auth context
+  useEffect(() => {
+    if (user?.id) {
+      fetchDashboardData(user.id);
     }
+  }, [user?.id]);
+
+  // Task 7.4: Edit handler — receives API response from EditCourseDialog and updates local state
+  const handleEditCourse = (apiResponse: any) => {
+    // EditCourseDialog calls coursesAPI.update internally and passes the raw API response here.
+    // Merge the updated fields back into the existing course entry to preserve computed fields.
+    setCourses(prev =>
+      prev.map(c =>
+        c.id === apiResponse.id
+          ? {
+              ...c,
+              title: apiResponse.title ?? c.title,
+              description: apiResponse.description ?? c.description,
+              category: apiResponse.category ?? c.category,
+              status: apiResponse.status ?? c.status,
+            }
+          : c
+      )
+    );
+    setEditingCourse(null);
   };
 
+  // Task 7.4: Delete handler — remove course via API and update local state
   const handleDeleteCourse = async (courseId: number) => {
     try {
+      setProcessingId(courseId);
       await coursesAPI.delete(courseId);
-      setCourses(courses.filter(c => c.id !== courseId));
+      setCourses(prev => prev.filter(c => c.id !== courseId));
     } catch (err: any) {
       console.error('Failed to delete course:', err);
       alert('Failed to delete course: ' + err.message);
+    } finally {
+      setProcessingId(null);
+      setDeletingCourse(null);
     }
   };
 
@@ -168,25 +213,44 @@ export default function TeacherDashboard() {
     { keys: ['1-4'], description: 'Edit course (quick access)' },
   ];
 
+  const statCards = [
+    { title: 'Total Courses', value: stats.totalCourses.toString(), icon: BookOpen, color: 'blue' },
+    { title: 'Total Students', value: stats.totalStudents.toString(), icon: Users, color: 'green' },
+    { title: 'Uploaded Lessons', value: stats.uploadedLessons.toString(), icon: Upload, color: 'purple' },
+    { title: 'Avg. Completion', value: stats.avgCompletion, icon: TrendingUp, color: 'orange' },
+  ] as const;
+
   return (
-    <DashboardLayout role="teacher" userName={user?.fullName || "Teacher"} userRole="Teacher">
+    <RouteGuard allowedRoles={['teacher']}>
+    <DashboardLayout role="teacher" userName={user?.full_name || 'Teacher'} userRole="Teacher">
       <KeyboardShortcutsHelp shortcuts={keyboardShortcuts} />
       <div className="space-y-6">
-        {/* Error State */}
+        {/* Task 7.5: Error State */}
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
-            {error}
+            <p className="font-medium">Failed to load dashboard data</p>
+            <p className="text-sm mt-1">{error}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={() => user?.id && fetchDashboardData(user.id)}
+            >
+              Retry
+            </Button>
           </div>
         )}
+
         {/* Header */}
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Teacher Dashboard</h1>
           <p className="text-gray-600 mt-1">Manage your courses and track student progress</p>
         </div>
 
-        {/* Statistics Cards */}
+        {/* Task 7.5: Loading State for stats cards */}
+        {/* Task 7.2: Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {stats.map((stat) => {
+          {statCards.map((stat) => {
             const Icon = stat.icon;
             const colorClasses = {
               blue: 'bg-blue-100 text-blue-700',
@@ -206,19 +270,24 @@ export default function TeacherDashboard() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold">{stat.value}</div>
+                  {loading ? (
+                    <div className="h-9 w-16 bg-gray-200 animate-pulse rounded" />
+                  ) : (
+                    <div className="text-3xl font-bold">{stat.value}</div>
+                  )}
                 </CardContent>
               </Card>
             );
           })}
         </div>
 
-        {/* Courses Table */}
+        {/* Task 7.3: Courses Table with student count */}
         <Card>
           <CardHeader>
             <CardTitle>My Courses</CardTitle>
           </CardHeader>
           <CardContent>
+            {/* Task 7.5: Loading State */}
             {loading ? (
               <div className="flex justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
@@ -269,9 +338,14 @@ export default function TeacherDashboard() {
                                   variant="outline"
                                   size="sm"
                                   onClick={() => setEditingCourse(course)}
+                                  disabled={processingId === course.id}
                                   aria-label={`Edit ${course.title}`}
                                 >
-                                  <Edit className="h-4 w-4" aria-hidden="true" />
+                                  {processingId === course.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Edit className="h-4 w-4" aria-hidden="true" />
+                                  )}
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent>
@@ -305,6 +379,7 @@ export default function TeacherDashboard() {
                                   variant="outline"
                                   size="sm"
                                   onClick={() => setDeletingCourse(course)}
+                                  disabled={processingId === course.id}
                                   aria-label={`Delete ${course.title}`}
                                 >
                                   <Trash2 className="h-4 w-4 text-red-600" aria-hidden="true" />
@@ -340,15 +415,13 @@ export default function TeacherDashboard() {
           <DeleteConfirmDialog
             open={!!deletingCourse}
             onOpenChange={(open) => !open && setDeletingCourse(null)}
-            onConfirm={() => {
-              handleDeleteCourse(deletingCourse.id);
-              setDeletingCourse(null);
-            }}
+            onConfirm={() => handleDeleteCourse(deletingCourse.id)}
             title="Delete Course"
             description={`Are you sure you want to delete "${deletingCourse.title}"? This action cannot be undone and will remove all associated lessons and student progress.`}
           />
         )}
       </div>
     </DashboardLayout>
+    </RouteGuard>
   );
 }

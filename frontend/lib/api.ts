@@ -51,11 +51,53 @@ async function apiRequest(endpoint: string, options: RequestInit = {}) {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
     headers,
+    credentials: 'include', // send cookies
   });
 
   const data = await response.json();
 
   if (!response.ok) {
+    // If account is pending approval, clear auth and redirect
+    if (response.status === 403 && data.error && data.error.toLowerCase().includes('pending')) {
+      clearAuth();
+      if (typeof window !== 'undefined') {
+        window.location.href = '/auth/pending';
+      }
+      return;
+    }
+    throw new Error(data.error || 'Request failed');
+  }
+
+  return data;
+}
+
+// Multipart form data request helper (for file uploads)
+async function apiRequestFormData(endpoint: string, formData: FormData, method = 'POST') {
+  const token = getToken();
+
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  // Do NOT set Content-Type — browser sets it automatically with boundary for multipart
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    method,
+    headers,
+    body: formData,
+    credentials: 'include', // send cookies
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    if (response.status === 403 && data.error && data.error.toLowerCase().includes('pending')) {
+      clearAuth();
+      if (typeof window !== 'undefined') {
+        window.location.href = '/auth/pending';
+      }
+      return;
+    }
     throw new Error(data.error || 'Request failed');
   }
 
@@ -122,7 +164,7 @@ export const authAPI = {
 
 // Users API
 export const usersAPI = {
-  getAll: (params?: { role?: string; search?: string }) => {
+  getAll: (params?: { role?: string; search?: string; page?: number; limit?: number }) => {
     const query = new URLSearchParams(params as any).toString();
     return apiRequest(`/users${query ? `?${query}` : ''}`);
   },
@@ -173,6 +215,8 @@ export const coursesAPI = {
     difficulty?: string;
     teacherId?: number;
     status?: string;
+    page?: number;
+    limit?: number;
   }) => {
     const query = new URLSearchParams(params as any).toString();
     return apiRequest(`/courses${query ? `?${query}` : ''}`);
@@ -210,17 +254,43 @@ export const lessonsAPI = {
 
   getById: (id: number) => apiRequest(`/lessons/${id}`),
 
-  create: (data: any) =>
-    apiRequest('/lessons', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  create: (data: {
+    courseId: number;
+    title: string;
+    description?: string;
+    content?: string;
+    videoFile?: File | null;
+    orderIndex: number;
+    durationMinutes?: number;
+  }) => {
+    const formData = new FormData();
+    formData.append('courseId', String(data.courseId));
+    formData.append('title', data.title);
+    formData.append('orderIndex', String(data.orderIndex));
+    if (data.description) formData.append('description', data.description);
+    if (data.content) formData.append('content', data.content);
+    if (data.durationMinutes !== undefined) formData.append('durationMinutes', String(data.durationMinutes));
+    if (data.videoFile) formData.append('video', data.videoFile);
+    return apiRequestFormData('/lessons', formData, 'POST');
+  },
 
-  update: (id: number, data: any) =>
-    apiRequest(`/lessons/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
+  update: (id: number, data: {
+    title?: string;
+    description?: string;
+    content?: string;
+    videoFile?: File | null;
+    orderIndex?: number;
+    durationMinutes?: number;
+  }) => {
+    const formData = new FormData();
+    if (data.title !== undefined) formData.append('title', data.title);
+    if (data.description !== undefined) formData.append('description', data.description);
+    if (data.content !== undefined) formData.append('content', data.content);
+    if (data.orderIndex !== undefined) formData.append('orderIndex', String(data.orderIndex));
+    if (data.durationMinutes !== undefined) formData.append('durationMinutes', String(data.durationMinutes));
+    if (data.videoFile) formData.append('video', data.videoFile);
+    return apiRequestFormData(`/lessons/${id}`, formData, 'PUT');
+  },
 
   delete: (id: number) =>
     apiRequest(`/lessons/${id}`, {
@@ -331,6 +401,7 @@ export const auditAPI = {
     startDate?: string;
     endDate?: string;
     limit?: number;
+    page?: number;
   }) => {
     const query = new URLSearchParams(params as any).toString();
     return apiRequest(`/audit${query ? `?${query}` : ''}`);

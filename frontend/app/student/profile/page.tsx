@@ -10,8 +10,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { KeyboardShortcutsHelp } from '@/components/keyboard-shortcuts-help';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from 'sonner';
-import { usersAPI, getStoredUser } from '@/lib/api';
+import { usersAPI } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 import {
   User,
   Mail,
@@ -23,46 +25,43 @@ import {
   CheckCircle,
   Loader2
 } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function StudentProfilePage() {
   const router = useRouter();
+  const { user, updateUser } = useAuth();
+
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [successMessage, setSuccessMessage] = useState('');
 
   const [formData, setFormData] = useState({
     name: '',
-    email: '',
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
   });
 
   const fetchProfileData = useCallback(async () => {
+    if (!user) return;
     try {
       setLoading(true);
-
-      const storedUser = getStoredUser();
-      if (!storedUser) return;
-
-      const userData = await usersAPI.getById(storedUser.id);
+      const userData = await usersAPI.getById(user.id);
       setProfile(userData);
       setFormData(prev => ({
         ...prev,
         name: userData.full_name,
-        email: userData.email,
       }));
     } catch (err: any) {
       console.error('Failed to fetch profile:', err);
-      toast.error("Error", {
+      toast.error('Error', {
         description: err.message || 'Failed to load profile. Please try again.',
       });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     fetchProfileData();
@@ -71,12 +70,12 @@ export default function StudentProfilePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
+    setSuccessMessage('');
 
     // Validation
     const newErrors: Record<string, string> = {};
 
     if (!formData.name) newErrors.name = 'Name is required';
-    if (!formData.email) newErrors.email = 'Email is required';
 
     if (formData.newPassword) {
       if (!formData.currentPassword) {
@@ -97,7 +96,6 @@ export default function StudentProfilePage() {
     try {
       const payload: any = {
         fullName: formData.name,
-        email: formData.email
       };
 
       if (formData.newPassword) {
@@ -107,15 +105,15 @@ export default function StudentProfilePage() {
 
       await usersAPI.update(profile.id, payload);
 
-      toast.success("Success", {
-        description: 'Profile updated successfully!',
-      });
+      // Update auth context after profile change (task 16.6)
+      updateUser({ full_name: formData.name });
+
+      setSuccessMessage('Profile updated successfully!');
       setFormData(prev => ({ ...prev, currentPassword: '', newPassword: '', confirmPassword: '' }));
-      // Refresh local profile data
-      setProfile({ ...profile, full_name: formData.name, email: formData.email });
+      setProfile((prev: any) => ({ ...prev, full_name: formData.name }));
     } catch (err: any) {
       console.error('Failed to update profile:', err);
-      toast.error("Update Failed", {
+      toast.error('Update Failed', {
         description: err.message || 'Failed to update profile. Please try again.',
       });
     } finally {
@@ -166,7 +164,7 @@ export default function StudentProfilePage() {
 
   return (
     <RouteGuard allowedRoles={['student']}>
-      <DashboardLayout role="student" userName={profile?.full_name || "Student"} userRole="Student">
+      <DashboardLayout role="student" userName={profile?.full_name || 'Student'} userRole="Student">
         <KeyboardShortcutsHelp shortcuts={keyboardShortcuts} />
         <div className="space-y-8 max-w-4xl">
           {/* Header */}
@@ -175,19 +173,28 @@ export default function StudentProfilePage() {
             <p className="text-lg text-gray-500">Manage your account information</p>
           </div>
 
+          {/* Success Message */}
+          {successMessage && (
+            <Alert className="bg-green-50 border-green-200 text-green-800">
+              <CheckCircle className="h-4 w-4" />
+              <AlertTitle>Success</AlertTitle>
+              <AlertDescription>{successMessage}</AlertDescription>
+            </Alert>
+          )}
+
           {loading ? (
             <div className="flex justify-center py-20">
               <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
             </div>
           ) : profile ? (
             <>
-
               <Card className="border-0 shadow-sm">
                 <CardHeader className="pb-4">
                   <CardTitle className="text-2xl">Account Information</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* School ID — read-only */}
                     <div className="space-y-2">
                       <Label className="text-sm font-medium text-gray-500">School ID</Label>
                       <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
@@ -195,6 +202,16 @@ export default function StudentProfilePage() {
                         <span className="font-semibold text-gray-900">{profile.school_id}</span>
                       </div>
                       <p className="text-xs text-gray-400">School ID cannot be changed</p>
+                    </div>
+
+                    {/* Email — read-only */}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-gray-500">Email Address</Label>
+                      <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
+                        <Mail className="h-5 w-5 text-gray-600" aria-hidden="true" />
+                        <span className="font-semibold text-gray-900">{profile.email}</span>
+                      </div>
+                      <p className="text-xs text-gray-400">Email cannot be changed</p>
                     </div>
 
                     <div className="space-y-2">
@@ -263,30 +280,6 @@ export default function StudentProfilePage() {
                         <p id="name-error" className="text-sm text-red-600 flex items-center gap-1">
                           <AlertCircle className="h-4 w-4" aria-hidden="true" />
                           {errors.name}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Email */}
-                    <div className="space-y-2">
-                      <Label htmlFor="email" className="text-sm font-medium">Email Address *</Label>
-                      <div className="flex items-center gap-3">
-                        <Mail className="h-5 w-5 text-gray-400" aria-hidden="true" />
-                        <Input
-                          id="email"
-                          type="email"
-                          value={formData.email}
-                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                          placeholder="student@example.com"
-                          className="flex-1 h-11"
-                          aria-invalid={!!errors.email}
-                          aria-describedby={errors.email ? 'email-error' : undefined}
-                        />
-                      </div>
-                      {errors.email && (
-                        <p id="email-error" className="text-sm text-red-600 flex items-center gap-1">
-                          <AlertCircle className="h-4 w-4" aria-hidden="true" />
-                          {errors.email}
                         </p>
                       )}
                     </div>

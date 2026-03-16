@@ -24,7 +24,7 @@ import {
 import { UserPlus, Loader2 } from 'lucide-react';
 
 interface AddUserDialogProps {
-  onSuccess?: () => void;
+  onSuccess?: (createdUser?: any) => void;
 }
 
 export function AddUserDialog({ onSuccess }: AddUserDialogProps) {
@@ -61,11 +61,11 @@ export function AddUserDialog({ onSuccess }: AddUserDialogProps) {
         } : {})
       };
 
-      await usersAPI.create(apiData);
+      const created = await usersAPI.create(apiData);
       setOpen(false);
       // Reset form
       setFormData({ name: '', email: '', password: '', role: 'student' });
-      if (onSuccess) onSuccess();
+      if (onSuccess) onSuccess(created);
     } catch (err: any) {
       console.error('Failed to create user:', err);
       setError(err.message || 'Failed to create user');

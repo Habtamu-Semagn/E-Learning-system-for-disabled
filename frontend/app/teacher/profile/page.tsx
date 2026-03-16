@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { usersAPI, systemAPI, getStoredUser } from '@/lib/api';
+import { usersAPI, systemAPI } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
+import { RouteGuard } from '@/lib/route-guard';
 import { DashboardLayout } from '@/components/dashboard-layout-new';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,8 +28,8 @@ import {
 export default function TeacherProfilePage() {
   const router = useRouter();
   useCommonShortcuts('teacher');
+  const { user, updateUser } = useAuth();
 
-  const [user, setUser] = useState<any>(null);
   const [profileData, setProfileData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
@@ -48,12 +50,10 @@ export default function TeacherProfilePage() {
   const [fetchError, setFetchError] = useState('');
 
   useEffect(() => {
-    const storedUser = getStoredUser();
-    setUser(storedUser);
-    if (storedUser) {
-      fetchProfileData(storedUser.id);
+    if (user) {
+      fetchProfileData(user.id);
     }
-  }, []);
+  }, [user?.id]);
 
   const fetchProfileData = async (userId: number) => {
     try {
@@ -123,7 +123,7 @@ export default function TeacherProfilePage() {
         updatePayload.password = formData.newPassword;
       }
 
-      const updatedUser = await usersAPI.update(user.id, updatePayload);
+      const updatedUser = await usersAPI.update(user!.id, updatePayload);
 
       setProfileData(updatedUser);
       setSuccessMessage('Profile updated successfully!');
@@ -134,12 +134,8 @@ export default function TeacherProfilePage() {
         confirmPassword: '',
       }));
 
-      // Update stored user name if it changed
-      if (updatedUser.full_name !== user.fullName) {
-        const newUser = { ...user, fullName: updatedUser.full_name };
-        localStorage.setItem('user', JSON.stringify(newUser));
-        setUser(newUser);
-      }
+      // Update auth context after profile change (task 10.6)
+      updateUser({ full_name: updatedUser.full_name });
     } catch (err: any) {
       console.error('Failed to update profile:', err);
       setErrors({ form: err.message || 'Failed to update profile. Please try again.' });
@@ -149,6 +145,7 @@ export default function TeacherProfilePage() {
   };
 
   return (
+    <RouteGuard allowedRoles={['teacher']}>
     <DashboardLayout role="teacher" userName={user?.fullName || "Teacher"} userRole="Teacher">
       <div className="space-y-6 max-w-4xl">
         {/* Header */}
@@ -390,5 +387,6 @@ export default function TeacherProfilePage() {
         )}
       </div>
     </DashboardLayout>
+    </RouteGuard>
   );
 }

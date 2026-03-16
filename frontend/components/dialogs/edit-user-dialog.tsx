@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Loader2 } from 'lucide-react';
 
 interface User {
   id: number;
@@ -44,6 +45,8 @@ export function EditUserDialog({ user, open, onOpenChange, onSave }: EditUserDia
     role: 'Student',
     status: 'Active',
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (user) {
@@ -53,6 +56,7 @@ export function EditUserDialog({ user, open, onOpenChange, onSave }: EditUserDia
         role: user.role,
         status: user.status,
       });
+      setError('');
     }
   }, [user]);
 
@@ -60,33 +64,38 @@ export function EditUserDialog({ user, open, onOpenChange, onSave }: EditUserDia
     e.preventDefault();
     if (!user) return;
 
-    const updatedUser = {
-      ...user,
-      ...formData,
-    };
+    setLoading(true);
+    setError('');
 
-    // Call API to update user
     try {
       // Map frontend fields to backend expected fields
-      const apiData = {
+      const apiData: Record<string, any> = {
         fullName: formData.name,
-        // email is usually not updated via common profile edit, but we keep it here if needed
-        // role and status might need different endpoints or admin-only fields in update
+        role: formData.role.toLowerCase(),
+        // Map status back to approval_status
+        approval_status: formData.status === 'Active' ? 'approved' : 'pending',
       };
 
       const response = await usersAPI.update(user.id, apiData);
 
-      if (onSave) {
-        onSave({
-          ...updatedUser,
-          name: response.full_name,
-          email: response.email,
-        });
-      }
+      const updatedUser: User = {
+        ...user,
+        name: response.full_name ?? formData.name,
+        email: response.email ?? formData.email,
+        role: (response.role ?? formData.role.toLowerCase()).charAt(0).toUpperCase() +
+              (response.role ?? formData.role.toLowerCase()).slice(1),
+        status: (response.approval_status ?? (formData.status === 'Active' ? 'approved' : 'pending')) === 'approved'
+          ? 'Active'
+          : 'Inactive',
+      };
+
+      if (onSave) onSave(updatedUser);
       onOpenChange(false);
-    } catch (error) {
-      console.error('Failed to update user:', error);
-      // Optional: show error message to user
+    } catch (err: any) {
+      console.error('Failed to update user:', err);
+      setError(err.message || 'Failed to update user');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -101,6 +110,11 @@ export function EditUserDialog({ user, open, onOpenChange, onSave }: EditUserDia
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
+            {error && (
+              <div className="text-sm font-medium text-red-600 bg-red-50 p-2 rounded">
+                {error}
+              </div>
+            )}
             <div className="grid gap-2">
               <Label htmlFor="edit-name">Full Name</Label>
               <Input
@@ -108,6 +122,7 @@ export function EditUserDialog({ user, open, onOpenChange, onSave }: EditUserDia
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 required
+                disabled={loading}
               />
             </div>
             <div className="grid gap-2">
@@ -116,15 +131,18 @@ export function EditUserDialog({ user, open, onOpenChange, onSave }: EditUserDia
                 id="edit-email"
                 type="email"
                 value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                required
+                disabled
+                className="bg-gray-50 cursor-not-allowed"
+                aria-readonly="true"
               />
+              <p className="text-xs text-gray-500">Email cannot be changed.</p>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="edit-role">Role</Label>
               <Select
                 value={formData.role}
                 onValueChange={(value) => setFormData({ ...formData, role: value })}
+                disabled={loading}
               >
                 <SelectTrigger id="edit-role">
                   <SelectValue />
@@ -141,6 +159,7 @@ export function EditUserDialog({ user, open, onOpenChange, onSave }: EditUserDia
               <Select
                 value={formData.status}
                 onValueChange={(value) => setFormData({ ...formData, status: value })}
+                disabled={loading}
               >
                 <SelectTrigger id="edit-status">
                   <SelectValue />
@@ -153,10 +172,18 @@ export function EditUserDialog({ user, open, onOpenChange, onSave }: EditUserDia
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={loading}
+            >
               Cancel
             </Button>
-            <Button type="submit">Save Changes</Button>
+            <Button type="submit" disabled={loading}>
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Changes
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

@@ -8,9 +8,25 @@ import { DashboardLayout } from '@/components/dashboard-layout-new';
 import { VideoPlayer } from '@/components/video-player';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+
+// Helper to construct full video URL from backend path
+const getVideoUrl = (videoPath: string | null | undefined): string | undefined => {
+  if (!videoPath) return undefined;
+  // If it's already a full URL, return as-is
+  if (videoPath.startsWith('http://') || videoPath.startsWith('https://')) {
+    return videoPath;
+  }
+  // Otherwise, prepend the backend base URL (remove /api suffix)
+  const baseUrl = API_BASE_URL.replace(/\/api$/, '');
+  return `${baseUrl}${videoPath}`;
+};
 import { Badge } from '@/components/ui/badge';
 import { KeyboardShortcutsHelp } from '@/components/keyboard-shortcuts-help';
-import { coursesAPI, progressAPI, getStoredUser } from '@/lib/api';
+import { coursesAPI, progressAPI } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
+import { EnrollCourseDialog } from '@/components/dialogs/enroll-course-dialog';
 import {
   Volume2,
   Download,
@@ -31,7 +47,7 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
   const [currentLesson, setCurrentLesson] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [user, setUser] = useState<any>(null);
+  const { user } = useAuth();
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [markedCompleted, setMarkedCompleted] = useState<number[]>([]);
 
@@ -39,9 +55,6 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
     try {
       setLoading(true);
       setError('');
-
-      const storedUser = getStoredUser();
-      setUser(storedUser);
 
       const courseId = parseInt(params.id);
       const courseData = await coursesAPI.getById(courseId);
@@ -97,11 +110,6 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
       alert('Text-to-speech is not supported in your browser.');
     }
   };
-
-  const materials = [
-    { name: 'Course Syllabus.pdf', size: '1.2 MB' },
-    { name: 'Resources Guide.pdf', size: '890 KB' },
-  ];
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -168,7 +176,7 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
 
   return (
     <RouteGuard allowedRoles={['student']}>
-      <DashboardLayout role="student" userName={user?.fullName || "Student"} userRole="Student">
+      <DashboardLayout role="student" userName={user?.full_name || "Student"} userRole="Student">
         <KeyboardShortcutsHelp shortcuts={keyboardShortcuts} />
         <div className="space-y-8">
           {error && (
@@ -198,12 +206,19 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
                 <div className="py-12 text-center bg-gray-50 rounded-xl border border-dashed border-gray-300">
                   <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-600 font-medium">You are not enrolled in this course.</p>
-                  <Button
-                    className="mt-4 bg-blue-600 hover:bg-blue-700"
-                    onClick={() => router.push('/student/courses')}
-                  >
-                    Go Back to Courses
-                  </Button>
+                  <div className="mt-4 flex flex-col sm:flex-row gap-3 justify-center items-center">
+                    <EnrollCourseDialog
+                      courseId={String(course?.id)}
+                      courseTitle={course?.title || ''}
+                      onSuccess={fetchCourseData}
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() => router.push('/student/courses')}
+                    >
+                      Go Back to Courses
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -211,7 +226,11 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
                   <div className="lg:col-span-2 space-y-6">
                     {/* Video Player */}
                     {currentLesson?.video_url && (
-                      <VideoPlayer title={currentLesson.title} src={currentLesson.video_url} />
+                      <VideoPlayer 
+                        key={currentLesson.id} 
+                        title={currentLesson.title} 
+                        src={getVideoUrl(currentLesson.video_url)} 
+                      />
                     )}
 
                     {/* Lesson Description */}

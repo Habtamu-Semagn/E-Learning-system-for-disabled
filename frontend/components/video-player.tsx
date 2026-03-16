@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Play, Pause, Volume2, VolumeX, Maximize, Settings } from 'lucide-react';
 
@@ -12,7 +12,39 @@ interface VideoPlayerProps {
 export function VideoPlayer({ src, title }: VideoPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [progress, setProgress] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(video.currentTime);
+      setProgress((video.currentTime / video.duration) * 100 || 0);
+    };
+
+    const handleLoadedMetadata = () => {
+      setDuration(video.duration);
+    };
+
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+
+    video.addEventListener('timeupdate', handleTimeUpdate);
+    video.addEventListener('loadedmetadata', handleLoadedMetadata);
+    video.addEventListener('play', handlePlay);
+    video.addEventListener('pause', handlePause);
+
+    return () => {
+      video.removeEventListener('timeupdate', handleTimeUpdate);
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      video.removeEventListener('play', handlePlay);
+      video.removeEventListener('pause', handlePause);
+    };
+  }, [src]);
 
   const togglePlay = () => {
     if (videoRef.current) {
@@ -21,7 +53,6 @@ export function VideoPlayer({ src, title }: VideoPlayerProps) {
       } else {
         videoRef.current.play();
       }
-      setIsPlaying(!isPlaying);
     }
   };
 
@@ -29,6 +60,30 @@ export function VideoPlayer({ src, title }: VideoPlayerProps) {
     if (videoRef.current) {
       videoRef.current.muted = !isMuted;
       setIsMuted(!isMuted);
+    }
+  };
+
+  const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!videoRef.current) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pos = (e.clientX - rect.left) / rect.width;
+    videoRef.current.currentTime = pos * videoRef.current.duration;
+  };
+
+  const formatTime = (seconds: number): string => {
+    if (isNaN(seconds)) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleFullscreen = () => {
+    if (videoRef.current) {
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      } else {
+        videoRef.current.requestFullscreen();
+      }
     }
   };
 
@@ -65,6 +120,7 @@ export function VideoPlayer({ src, title }: VideoPlayerProps) {
           onClick={togglePlay}
           className="text-white hover:bg-gray-700"
           aria-label={isPlaying ? 'Pause video' : 'Play video'}
+          disabled={!src}
         >
           {isPlaying ? (
             <Pause className="h-5 w-5" aria-hidden="true" />
@@ -79,6 +135,7 @@ export function VideoPlayer({ src, title }: VideoPlayerProps) {
           onClick={toggleMute}
           className="text-white hover:bg-gray-700"
           aria-label={isMuted ? 'Unmute video' : 'Mute video'}
+          disabled={!src}
         >
           {isMuted ? (
             <VolumeX className="h-5 w-5" aria-hidden="true" />
@@ -87,17 +144,31 @@ export function VideoPlayer({ src, title }: VideoPlayerProps) {
           )}
         </Button>
 
-        <div className="flex-1 bg-gray-700 h-1 rounded-full">
-          <div className="bg-blue-500 h-1 rounded-full w-1/3" role="progressbar" aria-valuenow={33} aria-valuemin={0} aria-valuemax={100} />
+        <div 
+          className="flex-1 bg-gray-700 h-1 rounded-full cursor-pointer"
+          onClick={handleProgressClick}
+          role="progressbar"
+          aria-valuenow={Math.round(progress)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`Video progress: ${Math.round(progress)}%`}
+        >
+          <div 
+            className="bg-blue-500 h-1 rounded-full transition-all" 
+            style={{ width: `${progress}%` }}
+          />
         </div>
 
-        <span className="text-white text-sm" aria-live="polite">0:00 / 10:00</span>
+        <span className="text-white text-sm min-w-[80px] text-right" aria-live="polite">
+          {formatTime(currentTime)} / {formatTime(duration)}
+        </span>
 
         <Button
           variant="ghost"
           size="icon"
           className="text-white hover:bg-gray-700"
           aria-label="Settings"
+          disabled
         >
           <Settings className="h-5 w-5" aria-hidden="true" />
         </Button>
@@ -105,8 +176,10 @@ export function VideoPlayer({ src, title }: VideoPlayerProps) {
         <Button
           variant="ghost"
           size="icon"
+          onClick={handleFullscreen}
           className="text-white hover:bg-gray-700"
           aria-label="Fullscreen"
+          disabled={!src}
         >
           <Maximize className="h-5 w-5" aria-hidden="true" />
         </Button>

@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Upload, X, Video } from 'lucide-react';
 
 interface Lesson {
   id: number;
@@ -22,6 +22,7 @@ interface Lesson {
   duration: string;
   order: number;
   description?: string;
+  video_url?: string;
 }
 
 interface EditLessonDialogProps {
@@ -36,6 +37,7 @@ export function EditLessonDialog({ lesson, open, onOpenChange, onSave }: EditLes
   const [duration, setDuration] = useState('');
   const [order, setOrder] = useState(1);
   const [description, setDescription] = useState('');
+  const [videoFile, setVideoFile] = useState<File | null>(null);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -45,8 +47,21 @@ export function EditLessonDialog({ lesson, open, onOpenChange, onSave }: EditLes
       setDuration(lesson.duration.toString());
       setOrder(lesson.order);
       setDescription(lesson.description || '');
+      setVideoFile(null);
+      setError('');
     }
   }, [lesson]);
+
+  const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    setVideoFile(file);
+  };
+
+  const clearVideo = () => {
+    setVideoFile(null);
+    const input = document.getElementById('edit-video') as HTMLInputElement;
+    if (input) input.value = '';
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,6 +76,7 @@ export function EditLessonDialog({ lesson, open, onOpenChange, onSave }: EditLes
         description,
         orderIndex: order,
         durationMinutes: parseInt(duration) || 0,
+        videoFile: videoFile ?? null,
       });
 
       onSave({
@@ -69,9 +85,9 @@ export function EditLessonDialog({ lesson, open, onOpenChange, onSave }: EditLes
         duration: data.duration_minutes?.toString() || '0',
         order: data.order_index,
         description: data.description || '',
+        video_url: data.video_url || '',
       });
 
-      console.log('Lesson updated:', data);
       onOpenChange(false);
     } catch (err: any) {
       console.error('Failed to update lesson:', err);
@@ -82,6 +98,11 @@ export function EditLessonDialog({ lesson, open, onOpenChange, onSave }: EditLes
   };
 
   if (!lesson) return null;
+
+  // Extract filename from existing video_url for display
+  const existingVideoName = lesson.video_url
+    ? lesson.video_url.split('/').pop()
+    : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -142,6 +163,48 @@ export function EditLessonDialog({ lesson, open, onOpenChange, onSave }: EditLes
                 placeholder="Brief description of the lesson content..."
                 rows={3}
               />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-video">Lesson Video</Label>
+              {/* Show existing video if present and no new file selected */}
+              {existingVideoName && !videoFile && (
+                <div className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-200 rounded-md mb-1">
+                  <Video className="h-4 w-4 text-blue-500 shrink-0" aria-hidden="true" />
+                  <span className="text-sm text-blue-700 truncate flex-1">Current: {existingVideoName}</span>
+                </div>
+              )}
+              {videoFile ? (
+                <div className="flex items-center gap-2 p-2 bg-gray-50 border rounded-md">
+                  <Upload className="h-4 w-4 text-gray-500 shrink-0" aria-hidden="true" />
+                  <span className="text-sm text-gray-700 truncate flex-1">{videoFile.name}</span>
+                  <button
+                    type="button"
+                    onClick={clearVideo}
+                    className="text-gray-400 hover:text-gray-600"
+                    aria-label="Remove selected video"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <label
+                  htmlFor="edit-video"
+                  className="flex items-center gap-2 p-2 border border-dashed rounded-md cursor-pointer hover:bg-gray-50 transition-colors"
+                >
+                  <Upload className="h-4 w-4 text-gray-400" aria-hidden="true" />
+                  <span className="text-sm text-gray-500">
+                    {existingVideoName ? 'Click to replace video' : 'Click to upload a video file'}
+                  </span>
+                  <Input
+                    id="edit-video"
+                    type="file"
+                    accept="video/*"
+                    className="hidden"
+                    onChange={handleVideoChange}
+                  />
+                </label>
+              )}
+              <p className="text-xs text-gray-400">Accepted formats: MP4, WebM, MOV, AVI (max 500 MB)</p>
             </div>
           </div>
           <DialogFooter>

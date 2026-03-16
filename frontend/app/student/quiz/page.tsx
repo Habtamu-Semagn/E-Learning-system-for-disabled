@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button';
 import { QuizCard } from '@/components/quiz-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { quizzesAPI, getStoredUser } from '@/lib/api';
-import { Clock, Award, Loader2, AlertCircle } from 'lucide-react';
+import { quizzesAPI } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
+import { Clock, Award, Loader2, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function QuizPage() {
@@ -18,7 +19,7 @@ export default function QuizPage() {
   const quizIdParam = searchParams.get('id');
   const courseIdParam = searchParams.get('courseId');
 
-  const [user, setUser] = useState<any>(null);
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [quiz, setQuiz] = useState<any>(null);
@@ -26,14 +27,12 @@ export default function QuizPage() {
   const [questions, setQuestions] = useState<any[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [previousAttempts, setPreviousAttempts] = useState<any[]>([]);
 
   const fetchQuizData = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
-
-      const storedUser = getStoredUser();
-      setUser(storedUser);
 
       let quizData: any = null;
 
@@ -59,6 +58,15 @@ export default function QuizPage() {
 
       setQuiz(quizData);
       setQuestions(quizData.questions || []);
+
+      // Fetch previous attempts for this quiz (task 15.7)
+      try {
+        const attempts = await quizzesAPI.getAttempts(quizData.id);
+        setPreviousAttempts(attempts || []);
+      } catch {
+        // Non-critical — don't fail the whole page if attempts can't be fetched
+        setPreviousAttempts([]);
+      }
     } catch (err: any) {
       console.error('Failed to fetch quiz:', err);
       setError(err.message || 'Failed to load quiz. Please try again.');
@@ -105,7 +113,7 @@ export default function QuizPage() {
 
   return (
     <RouteGuard allowedRoles={['student']}>
-      <DashboardLayout role="student" userName={user?.fullName || "Student"} userRole="Student">
+      <DashboardLayout role="student" userName={user?.full_name || 'Student'} userRole="Student">
         <div className="space-y-8">
           {error && (
             <Alert variant="destructive">
@@ -169,6 +177,54 @@ export default function QuizPage() {
                   onPrevious={handlePrevious}
                   selectedAnswer={answers[currentQuestion.id]}
                 />
+              )}
+
+              {/* Previous Attempts (task 15.7) */}
+              {previousAttempts.length > 0 && (
+                <Card className="border-0 shadow-sm" data-testid="previous-attempts">
+                  <CardHeader>
+                    <CardTitle className="text-lg">Previous Attempts</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {previousAttempts.map((attempt: any, index: number) => (
+                        <div
+                          key={attempt.id ?? index}
+                          className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                          data-testid="attempt-item"
+                        >
+                          <div className="flex items-center gap-3">
+                            {attempt.passed ? (
+                              <CheckCircle className="h-5 w-5 text-green-500" aria-hidden="true" />
+                            ) : (
+                              <XCircle className="h-5 w-5 text-red-500" aria-hidden="true" />
+                            )}
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">
+                                Attempt {previousAttempts.length - index}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {attempt.completed_at
+                                  ? new Date(attempt.completed_at).toLocaleDateString()
+                                  : 'Date unknown'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-bold text-gray-900">{attempt.score}%</span>
+                            <Badge
+                              className={attempt.passed
+                                ? 'bg-green-100 text-green-700 border-0'
+                                : 'bg-red-100 text-red-700 border-0'}
+                            >
+                              {attempt.passed ? 'Passed' : 'Failed'}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
               )}
             </>
           ) : availableQuizzes.length > 0 ? (

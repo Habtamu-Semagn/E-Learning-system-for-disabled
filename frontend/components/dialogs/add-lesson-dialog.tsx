@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Upload, X } from 'lucide-react';
 
 interface AddLessonDialogProps {
   courseId: number;
@@ -29,13 +29,30 @@ export function AddLessonDialog({ courseId, open, onOpenChange, onAdd, nextOrder
   const [duration, setDuration] = useState('');
   const [order, setOrder] = useState(nextOrder);
   const [description, setDescription] = useState('');
+  const [videoFile, setVideoFile] = useState<File | null>(null);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Sync order when nextOrder changes
-  useState(() => {
-    setOrder(nextOrder);
-  });
+  const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    setVideoFile(file);
+  };
+
+  const clearVideo = () => {
+    setVideoFile(null);
+    // Reset the file input
+    const input = document.getElementById('add-video') as HTMLInputElement;
+    if (input) input.value = '';
+  };
+
+  const resetForm = () => {
+    setTitle('');
+    setDuration('');
+    setOrder(nextOrder + 1);
+    setDescription('');
+    setVideoFile(null);
+    setError('');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,16 +66,11 @@ export function AddLessonDialog({ courseId, open, onOpenChange, onAdd, nextOrder
         description,
         orderIndex: order,
         durationMinutes: parseInt(duration) || 0,
+        videoFile: videoFile ?? null,
       });
 
       onAdd(data);
-      console.log('Lesson added:', data);
-
-      // Reset form
-      setTitle('');
-      setDuration('');
-      setOrder(nextOrder + 1);
-      setDescription('');
+      resetForm();
       onOpenChange(false);
     } catch (err: any) {
       console.error('Failed to add lesson:', err);
@@ -69,7 +81,7 @@ export function AddLessonDialog({ courseId, open, onOpenChange, onAdd, nextOrder
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(open) => { if (!open) resetForm(); onOpenChange(open); }}>
       <DialogContent className="sm:max-w-[500px]">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
@@ -85,9 +97,9 @@ export function AddLessonDialog({ courseId, open, onOpenChange, onAdd, nextOrder
               </div>
             )}
             <div className="grid gap-2">
-              <Label htmlFor="title">Lesson Title *</Label>
+              <Label htmlFor="add-title">Lesson Title *</Label>
               <Input
-                id="title"
+                id="add-title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g., Introduction to React Hooks"
@@ -96,9 +108,9 @@ export function AddLessonDialog({ courseId, open, onOpenChange, onAdd, nextOrder
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="duration">Duration (minutes) *</Label>
+                <Label htmlFor="add-duration">Duration (minutes) *</Label>
                 <Input
-                  id="duration"
+                  id="add-duration"
                   type="number"
                   value={duration}
                   onChange={(e) => setDuration(e.target.value)}
@@ -107,9 +119,9 @@ export function AddLessonDialog({ courseId, open, onOpenChange, onAdd, nextOrder
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="order">Order *</Label>
+                <Label htmlFor="add-order">Order *</Label>
                 <Input
-                  id="order"
+                  id="add-order"
                   type="number"
                   value={order}
                   onChange={(e) => setOrder(parseInt(e.target.value))}
@@ -119,21 +131,54 @@ export function AddLessonDialog({ courseId, open, onOpenChange, onAdd, nextOrder
               </div>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="description">Description (Optional)</Label>
+              <Label htmlFor="add-description">Description (Optional)</Label>
               <Textarea
-                id="description"
+                id="add-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Brief description of the lesson content..."
                 rows={3}
               />
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="add-video">Lesson Video (Optional)</Label>
+              {videoFile ? (
+                <div className="flex items-center gap-2 p-2 bg-gray-50 border rounded-md">
+                  <Upload className="h-4 w-4 text-gray-500 shrink-0" aria-hidden="true" />
+                  <span className="text-sm text-gray-700 truncate flex-1">{videoFile.name}</span>
+                  <button
+                    type="button"
+                    onClick={clearVideo}
+                    className="text-gray-400 hover:text-gray-600"
+                    aria-label="Remove selected video"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <label
+                  htmlFor="add-video"
+                  className="flex items-center gap-2 p-2 border border-dashed rounded-md cursor-pointer hover:bg-gray-50 transition-colors"
+                >
+                  <Upload className="h-4 w-4 text-gray-400" aria-hidden="true" />
+                  <span className="text-sm text-gray-500">Click to upload a video file</span>
+                  <Input
+                    id="add-video"
+                    type="file"
+                    accept="video/*"
+                    className="hidden"
+                    onChange={handleVideoChange}
+                  />
+                </label>
+              )}
+              <p className="text-xs text-gray-400">Accepted formats: MP4, WebM, MOV, AVI (max 500 MB)</p>
+            </div>
           </div>
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={() => { resetForm(); onOpenChange(false); }}
               disabled={isSubmitting}
             >
               Cancel

@@ -9,7 +9,8 @@ import { CourseCard } from '@/components/course-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { KeyboardShortcutsHelp } from '@/components/keyboard-shortcuts-help';
-import { systemAPI, enrollmentsAPI, getStoredUser } from '@/lib/api';
+import { systemAPI, enrollmentsAPI, progressAPI } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 import {
   BookOpen,
   Award,
@@ -27,33 +28,34 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function StudentDashboard() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [statsData, setStatsData] = useState<any>(null);
   const [enrolledCourses, setEnrolledCourses] = useState<any[]>([]);
+  const [progressData, setProgressData] = useState<any[]>([]);
 
 
   useEffect(() => {
-    const storedUser = getStoredUser();
-    setUser(storedUser);
-    if (storedUser) {
-      fetchDashboardData(storedUser.id);
+    if (user?.id) {
+      fetchDashboardData(user.id);
     }
-  }, []);
+  }, [user]);
 
   const fetchDashboardData = async (studentId: number) => {
     try {
       setLoading(true);
       setError('');
 
-      const [stats, enrollments] = await Promise.all([
+      const [stats, enrollments, progress] = await Promise.all([
         systemAPI.getStudentStats(),
-        enrollmentsAPI.getByStudent(studentId)
+        enrollmentsAPI.getByStudent(studentId),
+        progressAPI.getByStudent(studentId),
       ]);
 
       setStatsData(stats);
       setEnrolledCourses(enrollments);
+      setProgressData(progress);
     } catch (err: any) {
       console.error('Failed to fetch dashboard data:', err);
       setError(err.message || 'Failed to load dashboard data. Please try again.');
@@ -130,12 +132,12 @@ export default function StudentDashboard() {
 
   return (
     <RouteGuard allowedRoles={['student']}>
-      <DashboardLayout role="student" userName={user?.fullName || "Student"} userRole="Student">
+      <DashboardLayout role="student" userName={user?.full_name || "Student"} userRole="Student">
         <KeyboardShortcutsHelp shortcuts={keyboardShortcuts} />
         <div className="space-y-8">
           {/* Welcome Section - Clear hierarchy */}
           <div className="space-y-1">
-            <h1 className="text-4xl font-bold text-gray-900 tracking-tight">Welcome back, {user?.fullName?.split(' ')[0] || 'Student'}</h1>
+            <h1 className="text-4xl font-bold text-gray-900 tracking-tight">Welcome back, {user?.full_name?.split(' ')[0] || 'Student'}</h1>
             <p className="text-lg text-gray-500">Continue your learning journey</p>
           </div>
 

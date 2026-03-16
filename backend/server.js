@@ -1,6 +1,13 @@
 const express = require('express');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
+const compression = require('compression');
+const morgan = require('morgan');
+const path = require('path');
 require('dotenv').config();
+
+const logger = require('./logger');
+const pool = require('./db/connection');
 
 const app = express();
 
@@ -9,11 +16,29 @@ const rateLimit = require('express-rate-limit');
 const hpp = require('hpp');
 
 // Middleware
-app.use(helmet()); // Security headers
-app.use(cors());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allow serving uploaded files cross-origin
+}));
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+app.use(cookieParser());
 app.use(express.json({ limit: '10kb' })); // Body limit
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 app.use(hpp()); // HTTP Parameter Pollution protection
+app.use(compression()); // Gzip compression for all responses
+
+// HTTP request logging (skip /health to reduce noise)
+app.use(morgan('combined', {
+  stream: { write: (msg) => logger.info(msg.trim()) },
+  skip: (req) => req.url === '/health',
+}));
+
+// Serve uploaded files as static assets
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Rate limiting
 const limiter = rateLimit({
@@ -48,14 +73,30 @@ app.use('/api/feedback', feedbackRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/system', systemRoutes);
 
-// Health check
+// Health check — public, no auth required
+app.get('/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({
+      status: 'healthy',
+      uptime: process.uptime(),
+      version: '1.0.0',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    logger.error('Health check failed', { error: err.message });
+    res.status(503).json({ status: 'unhealthy', timestamp: new Date().toISOString() });
+  }
+});
+
+// Root info
 app.get('/', (req, res) => {
   res.json({ message: 'E-learning API is running', version: '1.0.0' });
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  logger.error(err.message, { stack: err.stack, url: req.url, method: req.method });
   res.status(500).json({ error: 'Something went wrong!' });
 });
 
@@ -67,5 +108,5 @@ app.use((req, res) => {
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  logger.info(`Server running on port ${PORT}`, { env: process.env.NODE_ENV || 'development' });
 });

@@ -10,9 +10,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { GraduationCap, AlertCircle } from 'lucide-react';
 import { authAPI } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 
 export default function SignupPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -91,12 +93,16 @@ export default function SignupPage() {
         signupData.bio = formData.bio;
       }
 
-      await authAPI.signup(signupData);
+      const response = await authAPI.signup(signupData);
 
-      if (formData.role === 'student') {
-        router.push('/auth/pending');
+      // Log the user in immediately
+      login(response.token, response.user);
+
+      // Redirect based on role
+      if (formData.role === 'teacher') {
+        router.push('/teacher/dashboard');
       } else {
-        router.push('/auth/login?message=Registration successful. Please login.');
+        router.push('/student/dashboard');
       }
     } catch (error: any) {
       console.error('Signup error:', error);

@@ -3,7 +3,17 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
+const rateLimit = require('express-rate-limit');
 const pool = require('../db/connection');
+
+// Login-specific rate limiter: 5 attempts per 15 minutes
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5,
+  message: { error: 'Too many login attempts, please try again after 15 minutes' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Generate JWT token
 const generateToken = (user) => {
@@ -15,7 +25,7 @@ const generateToken = (user) => {
 };
 
 // Unified Login
-router.post('/login', [
+router.post('/login', loginLimiter, [
   body('email').isEmail().normalizeEmail(),
   body('password').notEmpty()
 ], async (req, res) => {
@@ -41,24 +51,32 @@ router.post('/login', [
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Check approval status for students
-    if (user.role === 'student') {
-      if (user.approval_status === 'pending') {
-        return res.status(403).json({ error: 'Account pending approval', status: 'pending' });
-      }
-      if (user.approval_status === 'rejected') {
-        return res.status(403).json({ error: 'Account has been rejected', status: 'rejected' });
-      }
-    }
-
     const token = generateToken(user);
     delete user.password_hash;
+
+    // Set httpOnly cookie
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
+    });
 
     res.json({ user, token });
   } catch (error) {
     console.error('Unified login error:', error);
     res.status(500).json({ error: 'Login failed' });
   }
+});
+
+// Logout - clear cookie
+router.post('/logout', (req, res) => {
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+  });
+  res.json({ message: 'Logged out successfully' });
 });
 
 // Unified Signup
@@ -110,7 +128,7 @@ router.post('/signup', [
       const { schoolId, disabilityType } = extraFields;
       result = await pool.query(
         `INSERT INTO users (email, password_hash, role, full_name, school_id, disability_type, approval_status)
-         VALUES ($1, $2, 'student', $3, $4, $5, 'pending')
+         VALUES ($1, $2, 'student', $3, $4, $5, 'approved')
          RETURNING id, email, role, full_name, approval_status`,
         [email, passwordHash, fullName, schoolId, disabilityType]
       );
@@ -125,13 +143,10 @@ router.post('/signup', [
     }
 
     const responseData = {
-      message: role === 'student' ? 'Registration successful. Awaiting approval.' : 'Registration successful',
-      user: result.rows[0]
+      message: 'Registration successful',
+      user: result.rows[0],
+      token: generateToken(result.rows[0]),
     };
-
-    if (role === 'teacher') {
-      responseData.token = generateToken(result.rows[0]);
-    }
 
     res.status(201).json(responseData);
   } catch (error) {

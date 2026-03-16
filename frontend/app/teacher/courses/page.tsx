@@ -9,9 +9,12 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { BookOpen, Users, FileText, Plus, Edit, Search, Loader2 } from 'lucide-react';
+import { BookOpen, Users, FileText, Edit, Search, Loader2, Trash2, Eye } from 'lucide-react';
 import { AddCourseDialog } from '@/components/dialogs/add-course-dialog';
 import { EditCourseDialog } from '@/components/dialogs/edit-course-dialog';
+import { DeleteConfirmDialog } from '@/components/dialogs/delete-confirm-dialog';
+import { RouteGuard } from '@/lib/route-guard';
+import { toast } from 'sonner';
 
 interface Course {
   id: number;
@@ -28,6 +31,23 @@ interface Course {
   description: string;
 }
 
+function mapApiCourse(c: any): Course {
+  return {
+    id: c.id,
+    title: c.title,
+    instructor: c.teacher_name,
+    students: c.enrollment_count || 0,
+    totalStudents: c.enrollment_count || 0,
+    lessons: c.lessons_count || 0,
+    totalLessons: c.lessons_count || 0,
+    duration: c.duration || '',
+    category: c.category,
+    created: c.created_at,
+    status: c.status,
+    description: c.description,
+  };
+}
+
 export default function TeacherCoursesPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
@@ -35,6 +55,9 @@ export default function TeacherCoursesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [deletingCourse, setDeletingCourse] = useState<Course | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     const storedUser = getStoredUser();
@@ -47,20 +70,7 @@ export default function TeacherCoursesPage() {
       setLoading(true);
       setError('');
       const data = await coursesAPI.getTeacherCourses();
-      setCourses(data.map((c: any) => ({
-        id: c.id,
-        title: c.title,
-        instructor: c.teacher_name,
-        students: c.enrollment_count || 0,
-        totalStudents: c.enrollment_count || 0,
-        lessons: c.lesson_count || 0,
-        totalLessons: c.lesson_count || 0,
-        duration: c.duration || '',
-        category: c.category,
-        created: c.created_at,
-        status: c.status,
-        description: c.description
-      })));
+      setCourses(data.map(mapApiCourse));
     } catch (err: any) {
       console.error('Failed to fetch courses:', err);
       setError(err.message || 'Failed to load courses');
@@ -69,12 +79,40 @@ export default function TeacherCoursesPage() {
     }
   };
 
+  const handleDeleteConfirm = async () => {
+    if (!deletingCourse) return;
+    setDeleteLoading(true);
+    try {
+      await coursesAPI.delete(deletingCourse.id);
+      setCourses(prev => prev.filter(c => c.id !== deletingCourse.id));
+      toast.success('Course deleted', { description: `"${deletingCourse.title}" has been deleted.` });
+      setDeletingCourse(null);
+    } catch (err: any) {
+      console.error('Failed to delete course:', err);
+      toast.error('Error', { description: err.message || 'Failed to delete course' });
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleEditSave = (updatedCourse: any) => {
+    // EditCourseDialog already calls coursesAPI.update() internally and returns the API response
+    setCourses(prev => prev.map(c => {
+      if (c.id !== updatedCourse.id) return c;
+      return {
+        ...c,
+        title: updatedCourse.title ?? c.title,
+        description: updatedCourse.description ?? c.description,
+        status: updatedCourse.status ?? c.status,
+      };
+    }));
+    toast.success('Course updated', { description: 'Your changes have been saved.' });
+  };
+
   const filteredCourses = courses.filter(course =>
     course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     course.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -123,6 +161,7 @@ export default function TeacherCoursesPage() {
   ];
 
   return (
+    <RouteGuard allowedRoles={['teacher']}>
     <DashboardLayout role="teacher" userName={user?.fullName || "Teacher"} userRole="Teacher">
       <KeyboardShortcutsHelp shortcuts={keyboardShortcuts} />
       <div className="space-y-6">
@@ -132,10 +171,15 @@ export default function TeacherCoursesPage() {
             <h1 className="text-3xl font-bold text-gray-900">My Courses</h1>
             <p className="text-gray-600 mt-1">Manage and edit your courses</p>
           </div>
-          <AddCourseDialog />
+          <AddCourseDialog
+            onSuccess={fetchCourses}
+            onCourseCreated={(created) => {
+              setCourses(prev => [mapApiCourse(created), ...prev]);
+            }}
+          />
         </div>
 
-        {/* Search and Filters */}
+        {/* Search */}
         <div className="flex flex-col md:flex-row gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -172,14 +216,25 @@ export default function TeacherCoursesPage() {
                     <Badge variant={course.status === 'active' ? 'default' : 'secondary'}>
                       {course.status}
                     </Badge>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setEditingCourse(course)}
-                      aria-label={`Edit ${course.title}`}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setEditingCourse(course)}
+                        aria-label={`Edit ${course.title}`}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setDeletingCourse(course)}
+                        aria-label={`Delete ${course.title}`}
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                   <CardTitle className="line-clamp-2">{course.title}</CardTitle>
                   <p className="text-sm text-gray-600 mt-2 line-clamp-2">
@@ -201,17 +256,26 @@ export default function TeacherCoursesPage() {
                     </div>
                     <div className="text-center p-3 bg-purple-50 rounded-lg">
                       <BookOpen className="h-5 w-5 text-purple-700 mx-auto mb-1" aria-hidden="true" />
-                      <p className="text-2xl font-bold text-purple-700">4.5</p>
-                      <p className="text-xs text-gray-600">Rating</p>
+                      <p className="text-2xl font-bold text-purple-700">{course.category || '—'}</p>
+                      <p className="text-xs text-gray-600">Category</p>
                     </div>
                   </div>
                 </CardContent>
 
                 <CardFooter className="flex gap-2">
-                  <Button variant="outline" className="flex-1">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setEditingCourse(course)}
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
                     Edit Course
                   </Button>
-                  <Button className="flex-1">
+                  <Button
+                    className="flex-1"
+                    onClick={() => router.push(`/teacher/courses/${course.id}`)}
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
                     View Details
                   </Button>
                 </CardFooter>
@@ -226,11 +290,18 @@ export default function TeacherCoursesPage() {
         course={editingCourse}
         open={!!editingCourse}
         onOpenChange={(open) => !open && setEditingCourse(null)}
-        onSave={(updatedCourse) => {
-          setCourses(courses.map(c => c.id === updatedCourse.id ? updatedCourse : c));
-          console.log('Course updated:', updatedCourse);
-        }}
+        onSave={handleEditSave}
+      />
+
+      {/* Delete Confirm Dialog */}
+      <DeleteConfirmDialog
+        open={!!deletingCourse}
+        onOpenChange={(open) => !open && setDeletingCourse(null)}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Course"
+        description={`Are you sure you want to delete "${deletingCourse?.title}"? This action cannot be undone and will remove all associated lessons and enrollments.`}
       />
     </DashboardLayout>
+    </RouteGuard>
   );
 }

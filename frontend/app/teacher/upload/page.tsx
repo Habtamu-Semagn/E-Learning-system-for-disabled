@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { coursesAPI, lessonsAPI, getStoredUser } from '@/lib/api';
+import { coursesAPI, lessonsAPI } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
+import { RouteGuard } from '@/lib/route-guard';
 import { DashboardLayout } from '@/components/dashboard-layout-new';
 import { KeyboardShortcutsHelp } from '@/components/keyboard-shortcuts-help';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,30 +19,44 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Upload, FileVideo, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { BookOpen, FileVideo, CheckCircle2, AlertCircle, Loader2, PlusCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-export default function UploadLessonPage() {
+type ActiveTab = 'create-course' | 'add-lesson';
+
+export default function UploadPage() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const { user } = useAuth();
+
+  const [activeTab, setActiveTab] = useState<ActiveTab>('create-course');
   const [courses, setCourses] = useState<any[]>([]);
   const [loadingCourses, setLoadingCourses] = useState(true);
-  const [isUploading, setIsUploading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState('');
 
-  const [formData, setFormData] = useState({
+  // Course creation form state
+  const [courseForm, setCourseForm] = useState({
+    title: '',
+    description: '',
+    category: '',
+    difficulty: 'beginner',
+  });
+  const [courseSubmitting, setCourseSubmitting] = useState(false);
+  const [courseSuccess, setCourseSuccess] = useState('');
+  const [courseError, setCourseError] = useState('');
+
+  // Lesson creation form state
+  const [lessonForm, setLessonForm] = useState({
     courseId: '',
     title: '',
     description: '',
-    videoUrl: '',
-    contentUrl: '',
     durationMinutes: 30,
   });
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const [lessonSubmitting, setLessonSubmitting] = useState(false);
+  const [lessonSuccess, setLessonSuccess] = useState('');
+  const [lessonError, setLessonError] = useState('');
 
   useEffect(() => {
-    const storedUser = getStoredUser();
-    setUser(storedUser);
     fetchTeacherCourses();
   }, []);
 
@@ -51,58 +67,106 @@ export default function UploadLessonPage() {
       setCourses(data);
     } catch (err: any) {
       console.error('Failed to fetch courses:', err);
-      setError('Failed to load courses. Please refresh the page.');
     } finally {
       setLoadingCourses(false);
     }
   };
 
-  const handleInputChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  // --- Course form handlers ---
+  const handleCourseChange = (field: string, value: string) => {
+    setCourseForm(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleCourseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.courseId || !formData.title) {
-      setError('Please fill in all required fields.');
+    setCourseError('');
+    setCourseSuccess('');
+
+    if (!courseForm.title.trim()) {
+      setCourseError('Course title is required.');
+      return;
+    }
+    if (!courseForm.description.trim()) {
+      setCourseError('Course description is required.');
+      return;
+    }
+    if (!courseForm.category) {
+      setCourseError('Please select a category.');
       return;
     }
 
     try {
-      setIsUploading(true);
-      setError('');
+      setCourseSubmitting(true);
+      await coursesAPI.create({
+        title: courseForm.title.trim(),
+        description: courseForm.description.trim(),
+        category: courseForm.category,
+        difficultyLevel: courseForm.difficulty,
+        teacherId: user?.id,
+      });
 
-      // Fetch actual lessons for this course to calculate orderIndex
-      const existingLessons = await lessonsAPI.getByCourse(parseInt(formData.courseId));
+      setCourseSuccess('Course created successfully!');
+      setCourseForm({ title: '', description: '', category: '', difficulty: 'beginner' });
+      await fetchTeacherCourses();
+      setTimeout(() => setCourseSuccess(''), 4000);
+    } catch (err: any) {
+      setCourseError(err.message || 'Failed to create course. Please try again.');
+    } finally {
+      setCourseSubmitting(false);
+    }
+  };
+
+  // --- Lesson form handlers ---
+  const handleLessonChange = (field: string, value: any) => {
+    setLessonForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    setVideoFile(file);
+  };
+
+  const handleLessonSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLessonError('');
+    setLessonSuccess('');
+
+    if (!lessonForm.courseId) {
+      setLessonError('Please select a course for this lesson.');
+      return;
+    }
+    if (!lessonForm.title.trim()) {
+      setLessonError('Lesson title is required.');
+      return;
+    }
+    if (!videoFile) {
+      setLessonError('Please select a video file to upload.');
+      return;
+    }
+
+    try {
+      setLessonSubmitting(true);
+      const existingLessons = await lessonsAPI.getByCourse(parseInt(lessonForm.courseId));
       const orderIndex = existingLessons.length + 1;
 
       await lessonsAPI.create({
-        courseId: parseInt(formData.courseId),
-        title: formData.title,
-        description: formData.description,
-        videoUrl: formData.videoUrl || null,
-        content: formData.contentUrl || null,
+        courseId: parseInt(lessonForm.courseId),
+        title: lessonForm.title.trim(),
+        description: lessonForm.description.trim() || undefined,
+        videoFile,
         orderIndex,
-        durationMinutes: formData.durationMinutes
+        durationMinutes: lessonForm.durationMinutes,
       });
 
-      setSuccess(true);
-      setFormData({
-        courseId: formData.courseId, // Keep course selected
-        title: '',
-        description: '',
-        videoUrl: '',
-        contentUrl: '',
-        durationMinutes: 30,
-      });
-
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccess(false), 3000);
+      setLessonSuccess('Lesson added successfully!');
+      setLessonForm(prev => ({ ...prev, title: '', description: '', durationMinutes: 30 }));
+      setVideoFile(null);
+      if (videoInputRef.current) videoInputRef.current.value = '';
+      setTimeout(() => setLessonSuccess(''), 4000);
     } catch (err: any) {
-      console.error('Failed to upload lesson:', err);
-      setError(err.message || 'Failed to publish lesson. Please try again.');
+      setLessonError(err.message || 'Failed to add lesson. Please try again.');
     } finally {
-      setIsUploading(false);
+      setLessonSubmitting(false);
     }
   };
 
@@ -130,7 +194,6 @@ export default function UploadLessonPage() {
         }
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [router]);
@@ -139,179 +202,336 @@ export default function UploadLessonPage() {
     { keys: ['Ctrl', 'H'], description: 'Go to Dashboard' },
     { keys: ['Ctrl', 'C'], description: 'Go to Courses' },
     { keys: ['Ctrl', 'A'], description: 'Go to Accessibility' },
-    { keys: ['Ctrl', 'S'], description: 'Publish lesson' },
+    { keys: ['Ctrl', 'S'], description: 'Submit active form' },
   ];
 
   return (
-    <DashboardLayout role="teacher" userName={user?.fullName || "Teacher"} userRole="Teacher">
+    <RouteGuard allowedRoles={['teacher']}>
+    <DashboardLayout role="teacher" userName={user?.full_name || 'Teacher'} userRole="Teacher">
       <KeyboardShortcutsHelp shortcuts={keyboardShortcuts} />
       <div className="max-w-3xl mx-auto space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Upload New Lesson</h1>
-          <p className="text-gray-600 mt-1">Add learning materials to your course</p>
+          <h1 className="text-3xl font-bold text-gray-900">Course & Lesson Upload</h1>
+          <p className="text-gray-600 mt-1">Create a new course or add lessons to an existing one</p>
         </div>
 
-        {/* Success Alert */}
-        {success && (
-          <Alert className="bg-green-50 border-green-200 text-green-800">
-            <CheckCircle2 className="h-4 w-4" />
-            <AlertTitle>Success!</AlertTitle>
-            <AlertDescription>
-              Your lesson has been published successfully.
-            </AlertDescription>
-          </Alert>
-        )}
+        {/* Tab switcher */}
+        <div className="flex gap-2 border-b border-gray-200" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'create-course'}
+            data-testid="tab-create-course"
+            onClick={() => setActiveTab('create-course')}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'create-course'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <BookOpen className="h-4 w-4" aria-hidden="true" />
+            Create Course
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'add-lesson'}
+            data-testid="tab-add-lesson"
+            onClick={() => setActiveTab('add-lesson')}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'add-lesson'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <FileVideo className="h-4 w-4" aria-hidden="true" />
+            Add Lesson
+          </button>
+        </div>
 
-        {/* Error Alert */}
-        {error && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
+        {/* ── CREATE COURSE TAB ── */}
+        {activeTab === 'create-course' && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <PlusCircle className="h-5 w-5 text-blue-600" aria-hidden="true" />
+                New Course
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {courseSuccess && (
+                <Alert className="mb-4 bg-green-50 border-green-200 text-green-800">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <AlertTitle>Success</AlertTitle>
+                  <AlertDescription>{courseSuccess}</AlertDescription>
+                </Alert>
+              )}
+              {courseError && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>{courseError}</AlertDescription>
+                </Alert>
+              )}
 
-        {/* Upload Form */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Lesson Details</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Course Selection */}
-              <div className="space-y-2">
-                <Label htmlFor="course-select">Select Course</Label>
-                <Select
-                  value={formData.courseId}
-                  onValueChange={(val) => handleInputChange('courseId', val)}
-                >
-                  <SelectTrigger id="course-select">
-                    <SelectValue placeholder={loadingCourses ? "Loading courses..." : "Choose a course"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {courses.map(course => (
-                      <SelectItem key={course.id} value={course.id.toString()}>
-                        {course.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Lesson Title */}
-              <div className="space-y-2">
-                <Label htmlFor="lesson-title">Lesson Title</Label>
-                <Input
-                  id="lesson-title"
-                  placeholder="Enter lesson title"
-                  aria-required="true"
-                  required
-                  value={formData.title}
-                  onChange={(e) => handleInputChange('title', e.target.value)}
-                />
-              </div>
-
-              {/* Video URL (Mocking upload for now) */}
-              <div className="space-y-2">
-                <Label htmlFor="video-url">Video URL</Label>
-                <div className="flex gap-2">
+              <form onSubmit={handleCourseSubmit} className="space-y-5">
+                <div className="space-y-2">
+                  <Label htmlFor="course-title">
+                    Title <span className="text-red-500">*</span>
+                  </Label>
                   <Input
-                    id="video-url"
-                    placeholder="Enter video URL (e.g., YouTube or S3 link)"
-                    value={formData.videoUrl}
-                    onChange={(e) => handleInputChange('videoUrl', e.target.value)}
+                    id="course-title"
+                    placeholder="e.g. Introduction to Python"
+                    required
+                    value={courseForm.title}
+                    onChange={(e) => handleCourseChange('title', e.target.value)}
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="course-description">
+                    Description <span className="text-red-500">*</span>
+                  </Label>
+                  <Textarea
+                    id="course-description"
+                    placeholder="Describe what students will learn..."
+                    rows={4}
+                    required
+                    value={courseForm.description}
+                    onChange={(e) => handleCourseChange('description', e.target.value)}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="course-category">
+                      Category <span className="text-red-500">*</span>
+                    </Label>
+                    <Select
+                      value={courseForm.category}
+                      onValueChange={(val) => handleCourseChange('category', val)}
+                    >
+                      <SelectTrigger id="course-category">
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Technology">Technology</SelectItem>
+                        <SelectItem value="Science">Science</SelectItem>
+                        <SelectItem value="Mathematics">Mathematics</SelectItem>
+                        <SelectItem value="Language">Language</SelectItem>
+                        <SelectItem value="Arts">Arts</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="course-difficulty">Difficulty</Label>
+                    <Select
+                      value={courseForm.difficulty}
+                      onValueChange={(val) => handleCourseChange('difficulty', val)}
+                    >
+                      <SelectTrigger id="course-difficulty">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="beginner">Beginner</SelectItem>
+                        <SelectItem value="intermediate">Intermediate</SelectItem>
+                        <SelectItem value="advanced">Advanced</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 pt-2">
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => {
-                      // Mocking an upload/URL generation
-                      handleInputChange('videoUrl', `https://storage.example.com/videos/lesson-${Date.now()}.mp4`);
-                    }}
+                    className="flex-1"
+                    onClick={() => router.push('/teacher/dashboard')}
                   >
-                    <Upload className="h-4 w-4 mr-2" aria-hidden="true" />
-                    Mock Upload
+                    Cancel
+                  </Button>
+                  <Button type="submit" className="flex-1" disabled={courseSubmitting}>
+                    {courseSubmitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      'Create Course'
+                    )}
                   </Button>
                 </div>
-                <p className="text-xs text-gray-500">
-                  In a production environment, this would be a direct file upload to S3 or similar.
-                </p>
-              </div>
+              </form>
+            </CardContent>
+          </Card>
+        )}
 
-              {/* PDF Materials (Mocking upload for now) */}
-              <div className="space-y-2">
-                <Label htmlFor="pdf-url">Supplementary Materials URL (Optional)</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="pdf-url"
-                    placeholder="Enter PDF Materials URL"
-                    value={formData.contentUrl}
-                    onChange={(e) => handleInputChange('contentUrl', e.target.value)}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      handleInputChange('contentUrl', `https://storage.example.com/materials/slides-${Date.now()}.pdf`);
-                    }}
+        {/* ── ADD LESSON TAB ── */}
+        {activeTab === 'add-lesson' && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileVideo className="h-5 w-5 text-blue-600" aria-hidden="true" />
+                Add Lesson
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {lessonSuccess && (
+                <Alert className="mb-4 bg-green-50 border-green-200 text-green-800">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <AlertTitle>Success</AlertTitle>
+                  <AlertDescription>{lessonSuccess}</AlertDescription>
+                </Alert>
+              )}
+              {lessonError && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>{lessonError}</AlertDescription>
+                </Alert>
+              )}
+
+              <form onSubmit={handleLessonSubmit} className="space-y-5">
+                {/* Course selector */}
+                <div className="space-y-2">
+                  <Label htmlFor="lesson-course">
+                    Course <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={lessonForm.courseId}
+                    onValueChange={(val) => handleLessonChange('courseId', val)}
                   >
-                    <Upload className="h-4 w-4 mr-2" aria-hidden="true" />
-                    Mock Upload
-                  </Button>
-                </div>
-              </div>
-
-              {/* Lesson Description */}
-              <div className="space-y-2">
-                <Label htmlFor="lesson-description">Lesson Description</Label>
-                <Textarea
-                  id="lesson-description"
-                  placeholder="Describe what students will learn in this lesson..."
-                  rows={6}
-                  aria-required="true"
-                  required
-                  value={formData.description}
-                  onChange={(e) => handleInputChange('description', e.target.value)}
-                />
-              </div>
-
-              {/* Submit Buttons */}
-              <div className="flex gap-4 pt-4">
-                <Button type="button" variant="outline" className="flex-1" onClick={() => router.push('/teacher/dashboard')}>
-                  Cancel
-                </Button>
-                <Button type="submit" className="flex-1" disabled={isUploading}>
-                  {isUploading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Publishing...
-                    </>
-                  ) : (
-                    'Publish Lesson'
+                    <SelectTrigger id="lesson-course">
+                      <SelectValue
+                        placeholder={loadingCourses ? 'Loading courses…' : 'Select a course'}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {courses.map((course) => (
+                        <SelectItem key={course.id} value={course.id.toString()}>
+                          {course.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {!loadingCourses && courses.length === 0 && (
+                    <p className="text-sm text-amber-600">
+                      No courses yet.{' '}
+                      <button
+                        type="button"
+                        className="underline"
+                        onClick={() => setActiveTab('create-course')}
+                      >
+                        Create one first.
+                      </button>
+                    </p>
                   )}
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+                </div>
 
-        {/* Upload Tips */}
+                {/* Lesson title */}
+                <div className="space-y-2">
+                  <Label htmlFor="lesson-title">
+                    Lesson Title <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="lesson-title"
+                    placeholder="e.g. Variables and Data Types"
+                    required
+                    value={lessonForm.title}
+                    onChange={(e) => handleLessonChange('title', e.target.value)}
+                  />
+                </div>
+
+                {/* Video file input */}
+                <div className="space-y-2">
+                  <Label htmlFor="video-file">
+                    Video File <span className="text-red-500">*</span>
+                  </Label>
+                  <input
+                    ref={videoInputRef}
+                    id="video-file"
+                    type="file"
+                    accept="video/*"
+                    onChange={handleVideoChange}
+                    className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-gray-300 rounded-md p-1 cursor-pointer"
+                  />
+                  {videoFile && (
+                    <p className="text-xs text-green-700">
+                      Selected: {videoFile.name} ({(videoFile.size / 1024 / 1024).toFixed(1)} MB)
+                    </p>
+                  )}
+                </div>
+
+                {/* Description */}
+                <div className="space-y-2">
+                  <Label htmlFor="lesson-description">Description</Label>
+                  <Textarea
+                    id="lesson-description"
+                    placeholder="Describe what students will learn in this lesson..."
+                    rows={4}
+                    value={lessonForm.description}
+                    onChange={(e) => handleLessonChange('description', e.target.value)}
+                  />
+                </div>
+
+                {/* Duration */}
+                <div className="space-y-2">
+                  <Label htmlFor="lesson-duration">Duration (minutes)</Label>
+                  <Input
+                    id="lesson-duration"
+                    type="number"
+                    min={1}
+                    value={lessonForm.durationMinutes}
+                    onChange={(e) =>
+                      handleLessonChange('durationMinutes', parseInt(e.target.value) || 1)
+                    }
+                  />
+                </div>
+
+                <div className="flex gap-4 pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => router.push('/teacher/dashboard')}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" className="flex-1" disabled={lessonSubmitting}>
+                    {lessonSubmitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      'Add Lesson'
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Tips card */}
         <Card className="bg-blue-50 border-blue-200">
           <CardHeader>
-            <CardTitle className="text-blue-900">Upload Tips</CardTitle>
+            <CardTitle className="text-blue-900 text-base">Tips</CardTitle>
           </CardHeader>
           <CardContent>
-            <ul className="space-y-2 text-blue-800 text-sm" role="list">
-              <li>• Ensure videos have clear audio and are properly captioned for accessibility</li>
-              <li>• PDFs should be text-based (not scanned images) for screen reader compatibility</li>
-              <li>• Use descriptive titles that clearly indicate the lesson content</li>
-              <li>• Include detailed descriptions to help students understand learning objectives</li>
-              <li>• Test your materials before publishing to ensure quality</li>
+            <ul className="space-y-1 text-blue-800 text-sm" role="list">
+              <li>• Create a course first, then add lessons to it via the "Add Lesson" tab.</li>
+              <li>• Video files are uploaded directly from your computer — no URL needed.</li>
+              <li>• Ensure videos have clear audio and are captioned for accessibility.</li>
+              <li>• Use descriptive titles so students know what to expect.</li>
             </ul>
           </CardContent>
         </Card>
       </div>
     </DashboardLayout>
+    </RouteGuard>
   );
 }

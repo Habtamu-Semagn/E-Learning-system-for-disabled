@@ -1,9 +1,35 @@
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+const multer = require('multer');
 const { body, validationResult } = require('express-validator');
 const pool = require('../db/connection');
 const authenticateToken = require('../middleware/auth');
 const checkRole = require('../middleware/roleCheck');
+
+// Configure multer for video uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, '../uploads/videos'));
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const ext = path.extname(file.originalname);
+    cb(null, `video-${uniqueSuffix}${ext}`);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500 MB max
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('video/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only video files are allowed'));
+    }
+  },
+});
 
 // Get lessons for a course
 router.get('/course/:courseId', authenticateToken, async (req, res) => {
@@ -41,7 +67,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // Create lesson (Teacher and Admin only)
-router.post('/', authenticateToken, checkRole('teacher', 'admin'), [
+router.post('/', authenticateToken, checkRole('teacher', 'admin'), upload.single('video'), [
   body('courseId').isInt(),
   body('title').trim().notEmpty(),
   body('orderIndex').isInt()
@@ -52,6 +78,12 @@ router.post('/', authenticateToken, checkRole('teacher', 'admin'), [
   }
 
   const { courseId, title, description, content, videoUrl, orderIndex, durationMinutes } = req.body;
+
+  // If a video file was uploaded, use its path; otherwise fall back to videoUrl field
+  let finalVideoUrl = videoUrl || null;
+  if (req.file) {
+    finalVideoUrl = `/uploads/videos/${req.file.filename}`;
+  }
 
   try {
     // Check course ownership for teachers
@@ -69,7 +101,7 @@ router.post('/', authenticateToken, checkRole('teacher', 'admin'), [
       `INSERT INTO lessons (course_id, title, description, content, video_url, order_index, duration_minutes)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [courseId, title, description || null, content || null, videoUrl || null, orderIndex, durationMinutes || null]
+      [courseId, title, description || null, content || null, finalVideoUrl, orderIndex, durationMinutes || null]
     );
 
     res.status(201).json(result.rows[0]);
@@ -80,7 +112,7 @@ router.post('/', authenticateToken, checkRole('teacher', 'admin'), [
 });
 
 // Update lesson
-router.put('/:id', authenticateToken, checkRole('teacher', 'admin'), [
+router.put('/:id', authenticateToken, checkRole('teacher', 'admin'), upload.single('video'), [
   body('title').optional().trim().notEmpty(),
   body('orderIndex').optional().isInt(),
   body('durationMinutes').optional().isInt({ min: 0 })
@@ -92,6 +124,12 @@ router.put('/:id', authenticateToken, checkRole('teacher', 'admin'), [
   try {
     const { id } = req.params;
     const { title, description, content, videoUrl, orderIndex, durationMinutes } = req.body;
+
+    // If a new video file was uploaded, use its path
+    let finalVideoUrl = videoUrl !== undefined ? videoUrl : undefined;
+    if (req.file) {
+      finalVideoUrl = `/uploads/videos/${req.file.filename}`;
+    }
 
     // Check course ownership for teachers
     if (req.user.role === 'teacher') {
@@ -117,7 +155,7 @@ router.put('/:id', authenticateToken, checkRole('teacher', 'admin'), [
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $7
        RETURNING *`,
-      [title, description, content, videoUrl, orderIndex, durationMinutes, id]
+      [title, description, content, finalVideoUrl, orderIndex, durationMinutes, id]
     );
 
     if (result.rows.length === 0) {

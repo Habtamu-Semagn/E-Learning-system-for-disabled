@@ -33,6 +33,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { coursesAPI, lessonsAPI, enrollmentsAPI } from '@/lib/api';
+import { RouteGuard } from '@/lib/route-guard';
 import { EditCourseDialog } from '@/components/dialogs/edit-course-dialog';
 import { DeleteConfirmDialog } from '@/components/dialogs/delete-confirm-dialog';
 import { AddLessonDialog } from '@/components/dialogs/add-lesson-dialog';
@@ -43,6 +44,8 @@ interface Lesson {
   title: string;
   duration: string;
   order: number;
+  description?: string;
+  video_url?: string;
 }
 
 interface Student {
@@ -106,7 +109,8 @@ export default function AdminCourseDetailPage({ params }: { params: Promise<{ id
         title: l.title,
         duration: l.duration_minutes ? `${l.duration_minutes} min` : '0 min',
         order: l.order_index,
-        description: l.description || ''
+        description: l.description || '',
+        video_url: l.video_url || '',
       })));
     } catch (err: any) {
       console.error('Failed to fetch course details:', err);
@@ -168,7 +172,8 @@ export default function AdminCourseDetailPage({ params }: { params: Promise<{ id
       title: newLesson.title,
       duration: newLesson.duration_minutes ? `${newLesson.duration_minutes} min` : '0 min',
       order: newLesson.order_index,
-      description: newLesson.description || ''
+      description: newLesson.description || '',
+      video_url: newLesson.video_url || '',
     }].sort((a, b) => a.order - b.order));
     fetchCourseData(); // Refresh summary stats
   };
@@ -179,16 +184,19 @@ export default function AdminCourseDetailPage({ params }: { params: Promise<{ id
 
   if (loading && !course) {
     return (
+      <RouteGuard allowedRoles={['admin']}>
       <DashboardLayout role="admin" userName="Admin User" userRole="Administrator">
         <div className="flex items-center justify-center min-h-[400px]">
           <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
         </div>
       </DashboardLayout>
+      </RouteGuard>
     );
   }
 
   if (error && !course) {
     return (
+      <RouteGuard allowedRoles={['admin']}>
       <DashboardLayout role="admin" userName="Admin User" userRole="Administrator">
         <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
           <h2 className="text-lg font-semibold text-red-800 mb-2">Error Loading Course</h2>
@@ -196,12 +204,14 @@ export default function AdminCourseDetailPage({ params }: { params: Promise<{ id
           <Button onClick={() => window.history.back()}>Go Back</Button>
         </div>
       </DashboardLayout>
+      </RouteGuard>
     );
   }
 
   if (!course) return null;
 
   return (
+    <RouteGuard allowedRoles={['admin']}>
     <DashboardLayout role="admin" userName="Admin User" userRole="Administrator">
       <div className="space-y-6">
         {/* Error Alert */}
@@ -540,5 +550,6 @@ export default function AdminCourseDetailPage({ params }: { params: Promise<{ id
         onSave={handleEditLesson}
       />
     </DashboardLayout>
+    </RouteGuard>
   );
 }

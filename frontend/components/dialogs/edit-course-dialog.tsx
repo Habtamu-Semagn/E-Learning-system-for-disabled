@@ -39,14 +39,14 @@ interface EditCourseDialogProps {
   course: Course | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave?: (course: Course) => void;
+  onSave?: (course: any) => void;
 }
 
 export function EditCourseDialog({ course, open, onOpenChange, onSave }: EditCourseDialogProps) {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    status: 'Active',
+    status: 'draft',
   });
 
   useEffect(() => {
@@ -54,7 +54,8 @@ export function EditCourseDialog({ course, open, onOpenChange, onSave }: EditCou
       setFormData({
         title: course.title,
         description: course.description || '',
-        status: course.status,
+        // Normalize status: backend uses 'draft'|'published'|'archived'
+        status: course.status.toLowerCase(),
       });
     }
   }, [course]);
@@ -63,33 +64,23 @@ export function EditCourseDialog({ course, open, onOpenChange, onSave }: EditCou
     e.preventDefault();
     if (!course) return;
 
-    const updatedCourse = {
-      ...course,
-      ...formData,
-    };
-
     // Call API to update course
     try {
       const apiData = {
         title: formData.title,
         description: formData.description,
-        status: formData.status.toLowerCase(), // Backend expects lowercase
+        status: formData.status, // Already lowercase backend value
       };
 
       const response = await coursesAPI.update(course.id, apiData);
 
       if (onSave) {
-        onSave({
-          ...updatedCourse,
-          title: response.title,
-          description: response.description,
-          status: response.status.charAt(0).toUpperCase() + response.status.slice(1),
-        });
+        // Pass the full API response so the parent can update local state
+        onSave(response);
       }
       onOpenChange(false);
     } catch (error) {
       console.error('Failed to update course:', error);
-      // Optional: show error message to user
     }
   };
 
@@ -132,9 +123,9 @@ export function EditCourseDialog({ course, open, onOpenChange, onSave }: EditCou
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Active">Active</SelectItem>
-                  <SelectItem value="Draft">Draft</SelectItem>
-                  <SelectItem value="Archived">Archived</SelectItem>
+                  <SelectItem value="published">Published</SelectItem>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="archived">Archived</SelectItem>
                 </SelectContent>
               </Select>
             </div>

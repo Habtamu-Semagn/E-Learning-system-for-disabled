@@ -6,33 +6,42 @@ import { RouteGuard } from '@/lib/route-guard';
 import { DashboardLayout } from '@/components/dashboard-layout-new';
 import { CourseCard } from '@/components/course-card';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import { KeyboardShortcutsHelp } from '@/components/keyboard-shortcuts-help';
-import { coursesAPI, enrollmentsAPI, getStoredUser } from '@/lib/api';
-import { Search, Filter, Loader2, AlertCircle, BookOpen } from 'lucide-react';
+import { coursesAPI, enrollmentsAPI } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
+import { Search, Loader2, AlertCircle, BookOpen } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 export default function CoursesPage() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [difficultyFilter, setDifficultyFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [courses, setCourses] = useState<any[]>([]);
   const [myEnrollments, setMyEnrollments] = useState<number[]>([]);
+
+  const userId = user?.id ?? null;
 
   const fetchCourses = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
 
-      const storedUser = getStoredUser();
-      setUser(storedUser);
-
       // Fetch all published courses and student's enrollments in parallel
       const [allCourses, studentEnrollments] = await Promise.all([
-        coursesAPI.getAll({ status: 'published' }),
-        storedUser ? enrollmentsAPI.getByStudent(storedUser.id) : Promise.resolve([])
+        coursesAPI.getAll(),
+        userId ? enrollmentsAPI.getByStudent(userId) : Promise.resolve([]),
       ]);
 
       setCourses(allCourses);
@@ -43,22 +52,35 @@ export default function CoursesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     fetchCourses();
   }, [fetchCourses]);
 
+  // Extract unique categories from courses
+  const categories = Array.from(
+    new Set(courses.map((c) => c.category).filter(Boolean))
+  ) as string[];
 
-  const filteredCourses = courses.filter(course =>
-    course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (course.teacher_name && course.teacher_name.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredCourses = courses.filter((course) => {
+    const matchesSearch =
+      course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (course.teacher_name &&
+        course.teacher_name.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    const matchesCategory =
+      categoryFilter === 'all' || course.category === categoryFilter;
+
+    const matchesDifficulty =
+      difficultyFilter === 'all' || course.difficulty_level === difficultyFilter;
+
+    return matchesSearch && matchesCategory && matchesDifficulty;
+  });
 
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Navigation shortcuts (Ctrl+Key)
       if (e.ctrlKey) {
         switch (e.key.toLowerCase()) {
           case 'h':
@@ -80,7 +102,6 @@ export default function CoursesPage() {
         }
       }
 
-      // Number shortcuts for quick course access (1-9)
       if (!e.ctrlKey && !e.altKey && !e.shiftKey && /^[1-9]$/.test(e.key)) {
         const courseIndex = parseInt(e.key) - 1;
         if (courseIndex < filteredCourses.length) {
@@ -104,7 +125,7 @@ export default function CoursesPage() {
 
   return (
     <RouteGuard allowedRoles={['student']}>
-      <DashboardLayout role="student" userName={user?.fullName || "Student"} userRole="Student">
+      <DashboardLayout role="student" userName={user?.full_name || 'Student'} userRole="Student">
         <KeyboardShortcutsHelp shortcuts={keyboardShortcuts} />
         <div className="space-y-8">
           {/* Header */}
@@ -127,8 +148,7 @@ export default function CoursesPage() {
             </div>
           ) : (
             <>
-
-              {/* Search and Filter */}
+              {/* Search and Filters */}
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1 relative">
                   <Search
@@ -144,10 +164,32 @@ export default function CoursesPage() {
                     aria-label="Search courses"
                   />
                 </div>
-                <Button variant="outline" className="gap-2 h-11">
-                  <Filter className="h-4 w-4" aria-hidden="true" />
-                  Filter
-                </Button>
+
+                <Select value={categoryFilter} onValueChange={setCategoryFilter} aria-label="Filter by category">
+                  <SelectTrigger className="w-full sm:w-48 h-11" aria-label="Filter by category">
+                    <SelectValue placeholder="All Categories" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        {cat}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={difficultyFilter} onValueChange={setDifficultyFilter} aria-label="Filter by difficulty">
+                  <SelectTrigger className="w-full sm:w-48 h-11" aria-label="Filter by difficulty">
+                    <SelectValue placeholder="All Levels" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Levels</SelectItem>
+                    <SelectItem value="beginner">Beginner</SelectItem>
+                    <SelectItem value="intermediate">Intermediate</SelectItem>
+                    <SelectItem value="advanced">Advanced</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Courses Grid */}
@@ -158,6 +200,14 @@ export default function CoursesPage() {
                       const isEnrolled = myEnrollments.includes(course.id);
                       return (
                         <div key={course.id} className="relative">
+                          {isEnrolled && (
+                            <span
+                              className="absolute top-3 right-3 z-10 bg-green-500 text-white text-xs font-semibold px-2 py-1 rounded-full"
+                              data-testid="enrolled-badge"
+                            >
+                              Enrolled
+                            </span>
+                          )}
                           <CourseCard
                             id={course.id.toString()}
                             title={course.title}
@@ -178,9 +228,13 @@ export default function CoursesPage() {
                     <Button
                       variant="link"
                       className="text-blue-600 mt-2"
-                      onClick={() => setSearchQuery('')}
+                      onClick={() => {
+                        setSearchQuery('');
+                        setCategoryFilter('all');
+                        setDifficultyFilter('all');
+                      }}
                     >
-                      Clear search and view all
+                      Clear filters and view all
                     </Button>
                   </div>
                 )}
