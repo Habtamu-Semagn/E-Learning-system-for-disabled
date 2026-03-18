@@ -9,6 +9,7 @@ import { DashboardLayout } from '@/components/dashboard-layout-new';
 import { KeyboardShortcutsHelp } from '@/components/keyboard-shortcuts-help';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   Table,
   TableBody,
@@ -17,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { BookOpen, Users, Upload, TrendingUp, Edit, Eye, Trash2, Loader2 } from 'lucide-react';
+import { BookOpen, Users, Upload, TrendingUp, Edit, Eye, Trash2, Loader2, Send } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -66,6 +67,7 @@ export default function TeacherDashboard() {
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [deletingCourse, setDeletingCourse] = useState<Course | null>(null);
   const [processingId, setProcessingId] = useState<number | null>(null);
+  const [publishingId, setPublishingId] = useState<number | null>(null);
 
   // Fetch teacher's courses filtered by teacher_id from auth context
   const fetchDashboardData = async (teacherId: number) => {
@@ -164,6 +166,22 @@ export default function TeacherDashboard() {
     } finally {
       setProcessingId(null);
       setDeletingCourse(null);
+    }
+  };
+
+  // Publish handler — update course status to published
+  const handlePublishCourse = async (courseId: number) => {
+    try {
+      setPublishingId(courseId);
+      await coursesAPI.update(courseId, { status: 'published' });
+      setCourses(prev => prev.map(c => 
+        c.id === courseId ? { ...c, status: 'published' } : c
+      ));
+    } catch (err: any) {
+      console.error('Failed to publish course:', err);
+      alert('Failed to publish course: ' + err.message);
+    } finally {
+      setPublishingId(null);
     }
   };
 
@@ -303,6 +321,7 @@ export default function TeacherDashboard() {
                     <TableHead>Course Name</TableHead>
                     <TableHead>Students Enrolled</TableHead>
                     <TableHead>Lessons</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>Avg. Completion</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -313,6 +332,15 @@ export default function TeacherDashboard() {
                       <TableCell className="font-medium">{course.title}</TableCell>
                       <TableCell>{course.students}</TableCell>
                       <TableCell>{course.lessons}</TableCell>
+                      <TableCell>
+                        <Badge variant={
+                          course.status === 'published' ? 'default' : 
+                          course.status === 'draft' ? 'secondary' : 
+                          'outline'
+                        }>
+                          {course.status}
+                        </Badge>
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <div className="flex-1 bg-gray-200 rounded-full h-2 max-w-[100px]">
@@ -353,6 +381,32 @@ export default function TeacherDashboard() {
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
+
+                          {course.status === 'draft' && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handlePublishCourse(course.id)}
+                                    disabled={publishingId === course.id}
+                                    aria-label={`Publish ${course.title}`}
+                                    className="bg-green-50 border-green-200 hover:bg-green-100"
+                                  >
+                                    {publishingId === course.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin text-green-600" />
+                                    ) : (
+                                      <Send className="h-4 w-4 text-green-600" aria-hidden="true" />
+                                    )}
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Publish course</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
 
                           <TooltipProvider>
                             <Tooltip>

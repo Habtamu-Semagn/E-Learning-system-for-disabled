@@ -7,15 +7,25 @@ const pool = require('../db/connection');
 const authenticateToken = require('../middleware/auth');
 const checkRole = require('../middleware/roleCheck');
 
-// Configure multer for video uploads
+// Configure multer for video and subtitle uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '../uploads/videos'));
+    if (file.fieldname === 'video') {
+      cb(null, path.join(__dirname, '../uploads/videos'));
+    } else if (file.fieldname === 'subtitle') {
+      cb(null, path.join(__dirname, '../uploads/subtitles'));
+    } else {
+      cb(new Error('Invalid field name'));
+    }
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
     const ext = path.extname(file.originalname);
-    cb(null, `video-${uniqueSuffix}${ext}`);
+    if (file.fieldname === 'video') {
+      cb(null, `video-${uniqueSuffix}${ext}`);
+    } else if (file.fieldname === 'subtitle') {
+      cb(null, `subtitle-${uniqueSuffix}${ext}`);
+    }
   },
 });
 
@@ -23,10 +33,12 @@ const upload = multer({
   storage,
   limits: { fileSize: 500 * 1024 * 1024 }, // 500 MB max
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('video/')) {
+    if (file.fieldname === 'video' && file.mimetype.startsWith('video/')) {
+      cb(null, true);
+    } else if (file.fieldname === 'subtitle' && (file.mimetype === 'text/vtt' || file.originalname.endsWith('.vtt'))) {
       cb(null, true);
     } else {
-      cb(new Error('Only video files are allowed'));
+      cb(new Error('Only video files and VTT subtitle files are allowed'));
     }
   },
 });
@@ -67,7 +79,10 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // Create lesson (Teacher and Admin only)
-router.post('/', authenticateToken, checkRole('teacher', 'admin'), upload.single('video'), [
+router.post('/', authenticateToken, checkRole('teacher', 'admin'), upload.fields([
+  { name: 'video', maxCount: 1 },
+  { name: 'subtitle', maxCount: 1 }
+]), [
   body('courseId').isInt(),
   body('title').trim().notEmpty(),
   body('orderIndex').isInt()
@@ -77,12 +92,19 @@ router.post('/', authenticateToken, checkRole('teacher', 'admin'), upload.single
     return res.status(400).json({ errors: errors.array() });
   }
 
-  const { courseId, title, description, content, videoUrl, orderIndex, durationMinutes } = req.body;
+  const { courseId, title, description, content, videoUrl, subtitleUrl, orderIndex, durationMinutes } = req.body;
 
-  // If a video file was uploaded, use its path; otherwise fall back to videoUrl field
+  // Handle uploaded files
   let finalVideoUrl = videoUrl || null;
-  if (req.file) {
-    finalVideoUrl = `/uploads/videos/${req.file.filename}`;
+  let finalSubtitleUrl = subtitleUrl || null;
+  
+  if (req.files) {
+    if (req.files.video && req.files.video[0]) {
+      finalVideoUrl = `/uploads/videos/${req.files.video[0].filename}`;
+    }
+    if (req.files.subtitle && req.files.subtitle[0]) {
+      finalSubtitleUrl = `/uploads/subtitles/${req.files.subtitle[0].filename}`;
+    }
   }
 
   try {
@@ -98,10 +120,10 @@ router.post('/', authenticateToken, checkRole('teacher', 'admin'), upload.single
     }
 
     const result = await pool.query(
-      `INSERT INTO lessons (course_id, title, description, content, video_url, order_index, duration_minutes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO lessons (course_id, title, description, content, video_url, subtitle_url, order_index, duration_minutes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [courseId, title, description || null, content || null, finalVideoUrl, orderIndex, durationMinutes || null]
+      [courseId, title, description || null, content || null, finalVideoUrl, finalSubtitleUrl, orderIndex, durationMinutes || null]
     );
 
     res.status(201).json(result.rows[0]);
@@ -112,7 +134,10 @@ router.post('/', authenticateToken, checkRole('teacher', 'admin'), upload.single
 });
 
 // Update lesson
-router.put('/:id', authenticateToken, checkRole('teacher', 'admin'), upload.single('video'), [
+router.put('/:id', authenticateToken, checkRole('teacher', 'admin'), upload.fields([
+  { name: 'video', maxCount: 1 },
+  { name: 'subtitle', maxCount: 1 }
+]), [
   body('title').optional().trim().notEmpty(),
   body('orderIndex').optional().isInt(),
   body('durationMinutes').optional().isInt({ min: 0 })
@@ -123,12 +148,19 @@ router.put('/:id', authenticateToken, checkRole('teacher', 'admin'), upload.sing
   }
   try {
     const { id } = req.params;
-    const { title, description, content, videoUrl, orderIndex, durationMinutes } = req.body;
+    const { title, description, content, videoUrl, subtitleUrl, orderIndex, durationMinutes } = req.body;
 
-    // If a new video file was uploaded, use its path
+    // Handle uploaded files
     let finalVideoUrl = videoUrl !== undefined ? videoUrl : undefined;
-    if (req.file) {
-      finalVideoUrl = `/uploads/videos/${req.file.filename}`;
+    let finalSubtitleUrl = subtitleUrl !== undefined ? subtitleUrl : undefined;
+    
+    if (req.files) {
+      if (req.files.video && req.files.video[0]) {
+        finalVideoUrl = `/uploads/videos/${req.files.video[0].filename}`;
+      }
+      if (req.files.subtitle && req.files.subtitle[0]) {
+        finalSubtitleUrl = `/uploads/subtitles/${req.files.subtitle[0].filename}`;
+      }
     }
 
     // Check course ownership for teachers
@@ -150,12 +182,13 @@ router.put('/:id', authenticateToken, checkRole('teacher', 'admin'), upload.sing
            description = COALESCE($2, description),
            content = COALESCE($3, content),
            video_url = COALESCE($4, video_url),
-           order_index = COALESCE($5, order_index),
-           duration_minutes = COALESCE($6, duration_minutes),
+           subtitle_url = COALESCE($5, subtitle_url),
+           order_index = COALESCE($6, order_index),
+           duration_minutes = COALESCE($7, duration_minutes),
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $7
+       WHERE id = $8
        RETURNING *`,
-      [title, description, content, finalVideoUrl, orderIndex, durationMinutes, id]
+      [title, description, content, finalVideoUrl, finalSubtitleUrl, orderIndex, durationMinutes, id]
     );
 
     if (result.rows.length === 0) {

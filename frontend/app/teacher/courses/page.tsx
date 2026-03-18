@@ -9,7 +9,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { BookOpen, Users, FileText, Edit, Search, Loader2, Trash2, Eye } from 'lucide-react';
+import { BookOpen, Users, FileText, Edit, Search, Loader2, Trash2, Eye, Upload } from 'lucide-react';
 import { AddCourseDialog } from '@/components/dialogs/add-course-dialog';
 import { EditCourseDialog } from '@/components/dialogs/edit-course-dialog';
 import { DeleteConfirmDialog } from '@/components/dialogs/delete-confirm-dialog';
@@ -58,6 +58,7 @@ export default function TeacherCoursesPage() {
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [deletingCourse, setDeletingCourse] = useState<Course | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [publishingCourse, setPublishingCourse] = useState<number | null>(null);
 
   useEffect(() => {
     const storedUser = getStoredUser();
@@ -76,6 +77,22 @@ export default function TeacherCoursesPage() {
       setError(err.message || 'Failed to load courses');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePublishCourse = async (courseId: number) => {
+    setPublishingCourse(courseId);
+    try {
+      await coursesAPI.update(courseId, { status: 'published' });
+      setCourses(prev => prev.map(c => 
+        c.id === courseId ? { ...c, status: 'published' } : c
+      ));
+      toast.success('Course published', { description: 'Your course is now live and visible to students.' });
+    } catch (err: any) {
+      console.error('Failed to publish course:', err);
+      toast.error('Error', { description: err.message || 'Failed to publish course' });
+    } finally {
+      setPublishingCourse(null);
     }
   };
 
@@ -146,6 +163,15 @@ export default function TeacherCoursesPage() {
           setEditingCourse(courses[courseIndex]);
         }
       }
+
+      // P for publish first draft course
+      if (e.key.toLowerCase() === 'p' && !e.ctrlKey && !e.altKey) {
+        const firstDraftCourse = courses.find(c => c.status === 'draft');
+        if (firstDraftCourse) {
+          e.preventDefault();
+          handlePublishCourse(firstDraftCourse.id);
+        }
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -158,6 +184,7 @@ export default function TeacherCoursesPage() {
     { keys: ['Ctrl', 'A'], description: 'Go to Accessibility' },
     { keys: ['Ctrl', 'N'], description: 'Add new course' },
     { keys: ['1-4'], description: 'Edit course (quick access)' },
+    { keys: ['P'], description: 'Publish first draft course' },
   ];
 
   return (
@@ -213,7 +240,11 @@ export default function TeacherCoursesPage() {
               <Card key={course.id} className="flex flex-col">
                 <CardHeader>
                   <div className="flex justify-between items-start mb-2">
-                    <Badge variant={course.status === 'active' ? 'default' : 'secondary'}>
+                    <Badge variant={
+                      course.status === 'published' ? 'default' : 
+                      course.status === 'draft' ? 'secondary' : 
+                      'outline'
+                    }>
                       {course.status}
                     </Badge>
                     <div className="flex gap-1">
@@ -240,6 +271,13 @@ export default function TeacherCoursesPage() {
                   <p className="text-sm text-gray-600 mt-2 line-clamp-2">
                     {course.description}
                   </p>
+                  {course.status === 'draft' && (
+                    <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-md">
+                      <p className="text-xs text-yellow-700">
+                        📝 This course is in draft mode. Publish it to make it visible to students.
+                      </p>
+                    </div>
+                  )}
                 </CardHeader>
 
                 <CardContent className="flex-1">
@@ -263,21 +301,48 @@ export default function TeacherCoursesPage() {
                 </CardContent>
 
                 <CardFooter className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => setEditingCourse(course)}
-                  >
-                    <Edit className="h-4 w-4 mr-2" />
-                    Edit Course
-                  </Button>
-                  <Button
-                    className="flex-1"
-                    onClick={() => router.push(`/teacher/courses/${course.id}`)}
-                  >
-                    <Eye className="h-4 w-4 mr-2" />
-                    View Details
-                  </Button>
+                  {course.status === 'draft' ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => setEditingCourse(course)}
+                      >
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit Course
+                      </Button>
+                      <Button
+                        className="flex-1 bg-green-600 hover:bg-green-700"
+                        onClick={() => handlePublishCourse(course.id)}
+                        disabled={publishingCourse === course.id}
+                      >
+                        {publishingCourse === course.id ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Upload className="h-4 w-4 mr-2" />
+                        )}
+                        {publishingCourse === course.id ? 'Publishing...' : 'Publish Course'}
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => setEditingCourse(course)}
+                      >
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit Course
+                      </Button>
+                      <Button
+                        className="flex-1"
+                        onClick={() => router.push(`/teacher/courses/${course.id}`)}
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        View Details
+                      </Button>
+                    </>
+                  )}
                 </CardFooter>
               </Card>
             ))

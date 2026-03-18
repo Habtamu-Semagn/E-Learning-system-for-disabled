@@ -31,13 +31,27 @@ import {
   FileText,
   Plus,
   Loader2,
+  HelpCircle,
 } from 'lucide-react';
-import { coursesAPI, lessonsAPI, enrollmentsAPI } from '@/lib/api';
+import { coursesAPI, lessonsAPI, enrollmentsAPI, quizzesAPI } from '@/lib/api';
 import { RouteGuard } from '@/lib/route-guard';
 import { EditCourseDialog } from '@/components/dialogs/edit-course-dialog';
 import { DeleteConfirmDialog } from '@/components/dialogs/delete-confirm-dialog';
 import { AddLessonDialog } from '@/components/dialogs/add-lesson-dialog';
 import { EditLessonDialog } from '@/components/dialogs/edit-lesson-dialog';
+import { AddQuizDialog } from '@/components/dialogs/add-quiz-dialog';
+import { EditQuizDialog } from '@/components/dialogs/edit-quiz-dialog';
+import { QuizManagementDialog } from '@/components/dialogs/quiz-management-dialog';
+
+interface Quiz {
+  id: number;
+  title: string;
+  description?: string;
+  passing_score: number;
+  time_limit_minutes?: number;
+  question_count: number;
+  created_at: string;
+}
 
 interface Lesson {
   id: number;
@@ -77,6 +91,7 @@ export default function TeacherCourseDetailPage({ params }: { params: Promise<{ 
 
   const [course, setCourse] = useState<CourseData | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -87,10 +102,17 @@ export default function TeacherCourseDetailPage({ params }: { params: Promise<{ 
   const [deletingLesson, setDeletingLesson] = useState<Lesson | null>(null);
   const [addingLesson, setAddingLesson] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
+  
+  // Quiz dialog state
+  const [addingQuiz, setAddingQuiz] = useState(false);
+  const [editingQuiz, setEditingQuiz] = useState<Quiz | null>(null);
+  const [deletingQuiz, setDeletingQuiz] = useState<Quiz | null>(null);
+  const [managingQuiz, setManagingQuiz] = useState<Quiz | null>(null);
 
   useEffect(() => {
     fetchCourseData();
     fetchEnrollments();
+    fetchQuizzes();
   }, [id]);
 
   const fetchCourseData = async () => {
@@ -149,6 +171,26 @@ export default function TeacherCourseDetailPage({ params }: { params: Promise<{ 
     }
   };
 
+  const fetchQuizzes = async () => {
+    try {
+      const data = await quizzesAPI.getByCourse(parseInt(id));
+      setQuizzes(
+        data.map((q: any) => ({
+          id: q.id,
+          title: q.title,
+          description: q.description,
+          passing_score: q.passing_score,
+          time_limit_minutes: q.time_limit_minutes,
+          question_count: q.question_count || 0,
+          created_at: q.created_at,
+        }))
+      );
+    } catch (err: any) {
+      console.error('Failed to fetch quizzes:', err);
+      // Non-blocking — quizzes list stays empty
+    }
+  };
+
   const handleDeleteCourse = async () => {
     if (!course) return;
     try {
@@ -194,6 +236,42 @@ export default function TeacherCourseDetailPage({ params }: { params: Promise<{ 
         .map((l) => (l.id === updatedLesson.id ? updatedLesson : l))
         .sort((a, b) => a.order - b.order)
     );
+  };
+
+  const handleAddQuiz = (newQuiz: any) => {
+    setQuizzes([
+      ...quizzes,
+      {
+        id: newQuiz.id,
+        title: newQuiz.title,
+        description: newQuiz.description,
+        passing_score: newQuiz.passing_score,
+        time_limit_minutes: newQuiz.time_limit_minutes,
+        question_count: 0,
+        created_at: newQuiz.created_at,
+      },
+    ]);
+  };
+
+  const handleEditQuiz = (updatedQuiz: any) => {
+    setQuizzes(quizzes.map((q) => (q.id === updatedQuiz.id ? {
+      ...q,
+      title: updatedQuiz.title,
+      description: updatedQuiz.description,
+      passing_score: updatedQuiz.passing_score,
+      time_limit_minutes: updatedQuiz.time_limit_minutes,
+    } : q)));
+  };
+
+  const handleDeleteQuiz = async (quizId: number) => {
+    try {
+      await quizzesAPI.delete(quizId);
+      setQuizzes(quizzes.filter((q) => q.id !== quizId));
+      setDeletingQuiz(null);
+    } catch (err: any) {
+      console.error('Failed to delete quiz:', err);
+      setError('Failed to delete quiz');
+    }
   };
 
   if (loading && !course) {
@@ -432,6 +510,116 @@ export default function TeacherCourseDetailPage({ params }: { params: Promise<{ 
             </CardContent>
           </Card>
 
+          {/* Quizzes Table */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Course Quizzes ({quizzes.length})</CardTitle>
+              <Button size="sm" className="gap-2" onClick={() => setAddingQuiz(true)}>
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Add Quiz
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {quizzes.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-gray-500">
+                  <HelpCircle className="h-12 w-12 mb-2 text-gray-300" />
+                  <p className="text-lg font-medium">No quizzes yet</p>
+                  <p className="text-sm">Add your first quiz to assess student learning</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Quiz Title</TableHead>
+                      <TableHead>Questions</TableHead>
+                      <TableHead>Passing Score</TableHead>
+                      <TableHead>Time Limit</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {quizzes.map((quiz) => (
+                      <TableRow key={quiz.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <HelpCircle className="h-4 w-4 text-gray-400" aria-hidden="true" />
+                            <div>
+                              <p className="font-medium">{quiz.title}</p>
+                              {quiz.description && (
+                                <p className="text-sm text-gray-500 truncate max-w-xs">
+                                  {quiz.description}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>{quiz.question_count}</TableCell>
+                        <TableCell>{quiz.passing_score}%</TableCell>
+                        <TableCell>
+                          {quiz.time_limit_minutes ? `${quiz.time_limit_minutes} min` : 'No limit'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setManagingQuiz(quiz)}
+                                  >
+                                    <Edit className="h-4 w-4" aria-hidden="true" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Manage questions</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setEditingQuiz(quiz)}
+                                  >
+                                    <FileText className="h-4 w-4" aria-hidden="true" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Edit quiz settings</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setDeletingQuiz(quiz)}
+                                  >
+                                    <Trash2 className="h-4 w-4 text-red-600" aria-hidden="true" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Delete quiz</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Enrolled Students (read-only) */}
           <Card>
             <CardHeader>
@@ -524,6 +712,40 @@ export default function TeacherCourseDetailPage({ params }: { params: Promise<{ 
           open={!!editingLesson}
           onOpenChange={(open) => !open && setEditingLesson(null)}
           onSave={handleEditLesson}
+        />
+
+        {/* Add Quiz Dialog */}
+        <AddQuizDialog
+          courseId={course.id}
+          open={addingQuiz}
+          onOpenChange={setAddingQuiz}
+          onAdd={handleAddQuiz}
+        />
+
+        {/* Edit Quiz Dialog */}
+        <EditQuizDialog
+          quiz={editingQuiz}
+          open={!!editingQuiz}
+          onOpenChange={(open) => !open && setEditingQuiz(null)}
+          onSave={handleEditQuiz}
+        />
+
+        {/* Delete Quiz Confirmation */}
+        {deletingQuiz && (
+          <DeleteConfirmDialog
+            open={!!deletingQuiz}
+            onOpenChange={(open) => !open && setDeletingQuiz(null)}
+            onConfirm={() => handleDeleteQuiz(deletingQuiz.id)}
+            title="Delete Quiz"
+            description={`Are you sure you want to delete "${deletingQuiz.title}"? This action cannot be undone and will remove all questions.`}
+          />
+        )}
+
+        {/* Quiz Management Dialog */}
+        <QuizManagementDialog
+          quiz={managingQuiz}
+          open={!!managingQuiz}
+          onOpenChange={(open) => !open && setManagingQuiz(null)}
         />
       </DashboardLayout>
     </RouteGuard>

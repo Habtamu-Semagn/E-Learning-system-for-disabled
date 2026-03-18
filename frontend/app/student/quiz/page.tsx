@@ -169,7 +169,8 @@ export default function QuizPage() {
                   question={currentQuestion.question_text || currentQuestion.question}
                   options={currentQuestion.options?.map((o: any) => ({
                     id: o.id,
-                    text: o.option_text || o.text
+                    text: o.option_text || o.text,
+                    is_correct: o.is_correct
                   })) || []}
                   questionNumber={currentQuestionIndex + 1}
                   totalQuestions={totalQuestions}
@@ -287,6 +288,7 @@ export default function QuizPage() {
                 <li>• Navigate between questions using Previous/Next buttons or arrow keys</li>
                 <li>• Use keyboard shortcuts (1-4 or A-D) to select answers quickly</li>
                 <li>• Press R to read the question aloud, H for keyboard shortcuts help</li>
+                <li>• Audio feedback will announce if your answer is correct or incorrect</li>
                 <li>• Your progress is automatically saved</li>
               </ul>
             </CardContent>

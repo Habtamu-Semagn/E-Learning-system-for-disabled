@@ -207,331 +207,343 @@ export default function UploadPage() {
 
   return (
     <RouteGuard allowedRoles={['teacher']}>
-    <DashboardLayout role="teacher" userName={user?.full_name || 'Teacher'} userRole="Teacher">
-      <KeyboardShortcutsHelp shortcuts={keyboardShortcuts} />
-      <div className="max-w-3xl mx-auto space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Course & Lesson Upload</h1>
-          <p className="text-gray-600 mt-1">Create a new course or add lessons to an existing one</p>
-        </div>
+      <DashboardLayout role="teacher" userName={user?.full_name || 'Teacher'} userRole="Teacher">
+        <KeyboardShortcutsHelp shortcuts={keyboardShortcuts} />
+        <div className="min-h-screen bg-gray-50">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="space-y-8">
+              {/* Header */}
+              <div className="text-center">
+                <h1 className="text-3xl font-bold text-gray-900">Course & Lesson Upload</h1>
+                <p className="text-gray-600 mt-2">Create a new course or add lessons to an existing one</p>
+              </div>
 
-        {/* Tab switcher */}
-        <div className="flex gap-2 border-b border-gray-200" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'create-course'}
-            data-testid="tab-create-course"
-            onClick={() => setActiveTab('create-course')}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'create-course'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <BookOpen className="h-4 w-4" aria-hidden="true" />
-            Create Course
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'add-lesson'}
-            data-testid="tab-add-lesson"
-            onClick={() => setActiveTab('add-lesson')}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'add-lesson'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <FileVideo className="h-4 w-4" aria-hidden="true" />
-            Add Lesson
-          </button>
-        </div>
+              {/* Tab switcher */}
+              <div className="flex justify-center">
+                <div className="flex gap-2 border-b border-gray-200 bg-white rounded-t-lg px-4" role="tablist">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === 'create-course'}
+                    data-testid="tab-create-course"
+                    onClick={() => setActiveTab('create-course')}
+                    className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'create-course'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <BookOpen className="h-4 w-4" aria-hidden="true" />
+                    Create Course
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === 'add-lesson'}
+                    data-testid="tab-add-lesson"
+                    onClick={() => setActiveTab('add-lesson')}
+                    className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'add-lesson'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <FileVideo className="h-4 w-4" aria-hidden="true" />
+                    Add Lesson
+                  </button>
+                </div>
+              </div>
 
         {/* ── CREATE COURSE TAB ── */}
         {activeTab === 'create-course' && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <PlusCircle className="h-5 w-5 text-blue-600" aria-hidden="true" />
-                New Course
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {courseSuccess && (
-                <Alert className="mb-4 bg-green-50 border-green-200 text-green-800">
-                  <CheckCircle2 className="h-4 w-4" />
-                  <AlertTitle>Success</AlertTitle>
-                  <AlertDescription>{courseSuccess}</AlertDescription>
-                </Alert>
-              )}
-              {courseError && (
-                <Alert variant="destructive" className="mb-4">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Error</AlertTitle>
-                  <AlertDescription>{courseError}</AlertDescription>
-                </Alert>
-              )}
+          <div className="max-w-2xl mx-auto">
+            <Card className="shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-center justify-center">
+                  <PlusCircle className="h-5 w-5 text-blue-600" aria-hidden="true" />
+                  New Course
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                {courseSuccess && (
+                  <Alert className="mb-4 bg-green-50 border-green-200 text-green-800">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <AlertTitle>Success</AlertTitle>
+                    <AlertDescription>{courseSuccess}</AlertDescription>
+                  </Alert>
+                )}
+                {courseError && (
+                  <Alert variant="destructive" className="mb-4">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Error</AlertTitle>
+                    <AlertDescription>{courseError}</AlertDescription>
+                  </Alert>
+                )}
 
-              <form onSubmit={handleCourseSubmit} className="space-y-5">
-                <div className="space-y-2">
-                  <Label htmlFor="course-title">
-                    Title <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="course-title"
-                    placeholder="e.g. Introduction to Python"
-                    required
-                    value={courseForm.title}
-                    onChange={(e) => handleCourseChange('title', e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="course-description">
-                    Description <span className="text-red-500">*</span>
-                  </Label>
-                  <Textarea
-                    id="course-description"
-                    placeholder="Describe what students will learn..."
-                    rows={4}
-                    required
-                    value={courseForm.description}
-                    onChange={(e) => handleCourseChange('description', e.target.value)}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <form onSubmit={handleCourseSubmit} className="space-y-6">
                   <div className="space-y-2">
-                    <Label htmlFor="course-category">
-                      Category <span className="text-red-500">*</span>
+                    <Label htmlFor="course-title">
+                      Title <span className="text-red-500">*</span>
                     </Label>
-                    <Select
-                      value={courseForm.category}
-                      onValueChange={(val) => handleCourseChange('category', val)}
-                    >
-                      <SelectTrigger id="course-category">
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Technology">Technology</SelectItem>
-                        <SelectItem value="Science">Science</SelectItem>
-                        <SelectItem value="Mathematics">Mathematics</SelectItem>
-                        <SelectItem value="Language">Language</SelectItem>
-                        <SelectItem value="Arts">Arts</SelectItem>
-                        <SelectItem value="Other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Input
+                      id="course-title"
+                      placeholder="e.g. Introduction to Python"
+                      required
+                      value={courseForm.title}
+                      onChange={(e) => handleCourseChange('title', e.target.value)}
+                    />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="course-difficulty">Difficulty</Label>
-                    <Select
-                      value={courseForm.difficulty}
-                      onValueChange={(val) => handleCourseChange('difficulty', val)}
-                    >
-                      <SelectTrigger id="course-difficulty">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="beginner">Beginner</SelectItem>
-                        <SelectItem value="intermediate">Intermediate</SelectItem>
-                        <SelectItem value="advanced">Advanced</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label htmlFor="course-description">
+                      Description <span className="text-red-500">*</span>
+                    </Label>
+                    <Textarea
+                      id="course-description"
+                      placeholder="Describe what students will learn..."
+                      rows={4}
+                      required
+                      value={courseForm.description}
+                      onChange={(e) => handleCourseChange('description', e.target.value)}
+                    />
                   </div>
-                </div>
 
-                <div className="flex gap-4 pt-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => router.push('/teacher/dashboard')}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" className="flex-1" disabled={courseSubmitting}>
-                    {courseSubmitting ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Creating...
-                      </>
-                    ) : (
-                      'Create Course'
-                    )}
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="course-category">
+                        Category <span className="text-red-500">*</span>
+                      </Label>
+                      <Select
+                        value={courseForm.category}
+                        onValueChange={(val) => handleCourseChange('category', val)}
+                      >
+                        <SelectTrigger id="course-category">
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Technology">Technology</SelectItem>
+                          <SelectItem value="Science">Science</SelectItem>
+                          <SelectItem value="Mathematics">Mathematics</SelectItem>
+                          <SelectItem value="Language">Language</SelectItem>
+                          <SelectItem value="Arts">Arts</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="course-difficulty">Difficulty</Label>
+                      <Select
+                        value={courseForm.difficulty}
+                        onValueChange={(val) => handleCourseChange('difficulty', val)}
+                      >
+                        <SelectTrigger id="course-difficulty">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="beginner">Beginner</SelectItem>
+                          <SelectItem value="intermediate">Intermediate</SelectItem>
+                          <SelectItem value="advanced">Advanced</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 pt-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => router.push('/teacher/dashboard')}
+                    >
+                      Cancel
+                    </Button>
+                    <Button type="submit" className="flex-1" disabled={courseSubmitting}>
+                      {courseSubmitting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        'Create Course'
+                      )}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {/* ── ADD LESSON TAB ── */}
         {activeTab === 'add-lesson' && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileVideo className="h-5 w-5 text-blue-600" aria-hidden="true" />
-                Add Lesson
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {lessonSuccess && (
-                <Alert className="mb-4 bg-green-50 border-green-200 text-green-800">
-                  <CheckCircle2 className="h-4 w-4" />
-                  <AlertTitle>Success</AlertTitle>
-                  <AlertDescription>{lessonSuccess}</AlertDescription>
-                </Alert>
-              )}
-              {lessonError && (
-                <Alert variant="destructive" className="mb-4">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Error</AlertTitle>
-                  <AlertDescription>{lessonError}</AlertDescription>
-                </Alert>
-              )}
+          <div className="max-w-2xl mx-auto">
+            <Card className="shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-center justify-center">
+                  <FileVideo className="h-5 w-5 text-blue-600" aria-hidden="true" />
+                  Add Lesson
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                {lessonSuccess && (
+                  <Alert className="mb-4 bg-green-50 border-green-200 text-green-800">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <AlertTitle>Success</AlertTitle>
+                    <AlertDescription>{lessonSuccess}</AlertDescription>
+                  </Alert>
+                )}
+                {lessonError && (
+                  <Alert variant="destructive" className="mb-4">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Error</AlertTitle>
+                    <AlertDescription>{lessonError}</AlertDescription>
+                  </Alert>
+                )}
 
-              <form onSubmit={handleLessonSubmit} className="space-y-5">
-                {/* Course selector */}
-                <div className="space-y-2">
-                  <Label htmlFor="lesson-course">
-                    Course <span className="text-red-500">*</span>
-                  </Label>
-                  <Select
-                    value={lessonForm.courseId}
-                    onValueChange={(val) => handleLessonChange('courseId', val)}
-                  >
-                    <SelectTrigger id="lesson-course">
-                      <SelectValue
-                        placeholder={loadingCourses ? 'Loading courses…' : 'Select a course'}
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {courses.map((course) => (
-                        <SelectItem key={course.id} value={course.id.toString()}>
-                          {course.title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {!loadingCourses && courses.length === 0 && (
-                    <p className="text-sm text-amber-600">
-                      No courses yet.{' '}
-                      <button
-                        type="button"
-                        className="underline"
-                        onClick={() => setActiveTab('create-course')}
-                      >
-                        Create one first.
-                      </button>
-                    </p>
-                  )}
-                </div>
-
-                {/* Lesson title */}
-                <div className="space-y-2">
-                  <Label htmlFor="lesson-title">
-                    Lesson Title <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="lesson-title"
-                    placeholder="e.g. Variables and Data Types"
-                    required
-                    value={lessonForm.title}
-                    onChange={(e) => handleLessonChange('title', e.target.value)}
-                  />
-                </div>
-
-                {/* Video file input */}
-                <div className="space-y-2">
-                  <Label htmlFor="video-file">
-                    Video File <span className="text-red-500">*</span>
-                  </Label>
-                  <input
-                    ref={videoInputRef}
-                    id="video-file"
-                    type="file"
-                    accept="video/*"
-                    onChange={handleVideoChange}
-                    className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-gray-300 rounded-md p-1 cursor-pointer"
-                  />
-                  {videoFile && (
-                    <p className="text-xs text-green-700">
-                      Selected: {videoFile.name} ({(videoFile.size / 1024 / 1024).toFixed(1)} MB)
-                    </p>
-                  )}
-                </div>
-
-                {/* Description */}
-                <div className="space-y-2">
-                  <Label htmlFor="lesson-description">Description</Label>
-                  <Textarea
-                    id="lesson-description"
-                    placeholder="Describe what students will learn in this lesson..."
-                    rows={4}
-                    value={lessonForm.description}
-                    onChange={(e) => handleLessonChange('description', e.target.value)}
-                  />
-                </div>
-
-                {/* Duration */}
-                <div className="space-y-2">
-                  <Label htmlFor="lesson-duration">Duration (minutes)</Label>
-                  <Input
-                    id="lesson-duration"
-                    type="number"
-                    min={1}
-                    value={lessonForm.durationMinutes}
-                    onChange={(e) =>
-                      handleLessonChange('durationMinutes', parseInt(e.target.value) || 1)
-                    }
-                  />
-                </div>
-
-                <div className="flex gap-4 pt-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => router.push('/teacher/dashboard')}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" className="flex-1" disabled={lessonSubmitting}>
-                    {lessonSubmitting ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Uploading...
-                      </>
-                    ) : (
-                      'Add Lesson'
+                <form onSubmit={handleLessonSubmit} className="space-y-6">
+                  {/* Course selector */}
+                  <div className="space-y-2">
+                    <Label htmlFor="lesson-course">
+                      Course <span className="text-red-500">*</span>
+                    </Label>
+                    <Select
+                      value={lessonForm.courseId}
+                      onValueChange={(val) => handleLessonChange('courseId', val)}
+                    >
+                      <SelectTrigger id="lesson-course">
+                        <SelectValue
+                          placeholder={loadingCourses ? 'Loading courses…' : 'Select a course'}
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {courses.map((course) => (
+                          <SelectItem key={course.id} value={course.id.toString()}>
+                            {course.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {!loadingCourses && courses.length === 0 && (
+                      <p className="text-sm text-amber-600">
+                        No courses yet.{' '}
+                        <button
+                          type="button"
+                          className="underline"
+                          onClick={() => setActiveTab('create-course')}
+                        >
+                          Create one first.
+                        </button>
+                      </p>
                     )}
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+                  </div>
+
+                  {/* Lesson title */}
+                  <div className="space-y-2">
+                    <Label htmlFor="lesson-title">
+                      Lesson Title <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="lesson-title"
+                      placeholder="e.g. Variables and Data Types"
+                      required
+                      value={lessonForm.title}
+                      onChange={(e) => handleLessonChange('title', e.target.value)}
+                    />
+                  </div>
+
+                  {/* Video file input */}
+                  <div className="space-y-2">
+                    <Label htmlFor="video-file">
+                      Video File <span className="text-red-500">*</span>
+                    </Label>
+                    <input
+                      ref={videoInputRef}
+                      id="video-file"
+                      type="file"
+                      accept="video/*"
+                      onChange={handleVideoChange}
+                      className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-gray-300 rounded-md p-1 cursor-pointer"
+                    />
+                    {videoFile && (
+                      <p className="text-xs text-green-700">
+                        Selected: {videoFile.name} ({(videoFile.size / 1024 / 1024).toFixed(1)} MB)
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Description */}
+                  <div className="space-y-2">
+                    <Label htmlFor="lesson-description">Description</Label>
+                    <Textarea
+                      id="lesson-description"
+                      placeholder="Describe what students will learn in this lesson..."
+                      rows={4}
+                      value={lessonForm.description}
+                      onChange={(e) => handleLessonChange('description', e.target.value)}
+                    />
+                  </div>
+
+                  {/* Duration */}
+                  <div className="space-y-2">
+                    <Label htmlFor="lesson-duration">Duration (minutes)</Label>
+                    <Input
+                      id="lesson-duration"
+                      type="number"
+                      min={1}
+                      value={lessonForm.durationMinutes}
+                      onChange={(e) =>
+                        handleLessonChange('durationMinutes', parseInt(e.target.value) || 1)
+                      }
+                    />
+                  </div>
+
+                  <div className="flex gap-4 pt-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => router.push('/teacher/dashboard')}
+                    >
+                      Cancel
+                    </Button>
+                    <Button type="submit" className="flex-1" disabled={lessonSubmitting}>
+                      {lessonSubmitting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        'Add Lesson'
+                      )}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {/* Tips card */}
-        <Card className="bg-blue-50 border-blue-200">
-          <CardHeader>
-            <CardTitle className="text-blue-900 text-base">Tips</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-1 text-blue-800 text-sm" role="list">
-              <li>• Create a course first, then add lessons to it via the "Add Lesson" tab.</li>
-              <li>• Video files are uploaded directly from your computer — no URL needed.</li>
-              <li>• Ensure videos have clear audio and are captioned for accessibility.</li>
-              <li>• Use descriptive titles so students know what to expect.</li>
-            </ul>
-          </CardContent>
-        </Card>
+        <div className="max-w-2xl mx-auto">
+          <Card className="bg-blue-50 border-blue-200 shadow-lg">
+            <CardHeader>
+              <CardTitle className="text-blue-900 text-base text-center">Tips</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2 text-blue-800 text-sm" role="list">
+                <li>• Create a course first, then add lessons to it via the "Add Lesson" tab.</li>
+                <li>• Video files are uploaded directly from your computer — no URL needed.</li>
+                <li>• Ensure videos have clear audio and are captioned for accessibility.</li>
+                <li>• Use descriptive titles so students know what to expect.</li>
+              </ul>
+            </CardContent>
+          </Card>
+        </div>
       </div>
-    </DashboardLayout>
-    </RouteGuard>
-  );
+    </div>
+  </div>
+</DashboardLayout>
+</RouteGuard>
+);
 }

@@ -18,11 +18,12 @@ VALUES
 ('Screen Reader Optimization', 'How to optimize your apps for screen reader users.', (SELECT id FROM users WHERE email = 'teacher@eduaccess.com'), 'Accessibility', 'intermediate', 'published');
 
 -- 3. Create Sample Lessons for the first course
-INSERT INTO lessons (course_id, title, content, video_url, order_index)
+INSERT INTO lessons (course_id, title, content, video_url, subtitle_url, order_index)
 VALUES 
-((SELECT id FROM courses WHERE title = 'Introduction to Web Accessibility'), 'What is WCAG?', 'WCAG stands for Web Content Accessibility Guidelines...', 'https://www.youtube.com/watch?v=20SHvU2PKsM', 0),
-((SELECT id FROM courses WHERE title = 'Introduction to Web Accessibility'), 'Semantic HTML', 'Using the right HTML elements for the right job...', 'https://www.youtube.com/watch?v=91W9As-6V3A', 1),
-((SELECT id FROM courses WHERE title = 'Introduction to Web Accessibility'), 'ARIA Labels and Roles', 'When HTML is not enough, use ARIA...', 'https://www.youtube.com/watch?v=g9Q6SjdvXvE', 2);
+((SELECT id FROM courses WHERE title = 'Introduction to Web Accessibility'), 'What is WCAG?', 'WCAG stands for Web Content Accessibility Guidelines...', '/uploads/videos/video-1773812195075-374439595.mp4', '/uploads/subtitles/subtitle-1773812214583-160534304.vtt', 0),
+((SELECT id FROM courses WHERE title = 'Introduction to Web Accessibility'), 'Semantic HTML', 'Using the right HTML elements for the right job...', 'https://www.youtube.com/watch?v=91W9As-6V3A', NULL, 1),
+((SELECT id FROM courses WHERE title = 'Introduction to Web Accessibility'), 'ARIA Labels and Roles', 'When HTML is not enough, use ARIA...', 'https://www.youtube.com/watch?v=g9Q6SjdvXvE', NULL, 2)
+ON CONFLICT DO NOTHING;
 
 -- 4. Create a Sample Quiz
 INSERT INTO quizzes (course_id, title, description, time_limit_minutes, passing_score)

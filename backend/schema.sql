@@ -67,6 +67,7 @@ CREATE TABLE lessons (
     description TEXT,
     content TEXT,
     video_url TEXT,
+    subtitle_url TEXT,
     order_index INTEGER NOT NULL,
     duration_minutes INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

@@ -35,7 +35,11 @@ frontend/dist/
 **/yarn-error.log*
 
 # Uploads (user-generated content - usually not committed)
-backend/uploads/
+backend/uploads/videos/*
+backend/uploads/subtitles/*
+!backend/uploads/videos/.gitkeep
+!backend/uploads/subtitles/.gitkeep
+!backend/uploads/subtitles/sample-subtitle.vtt
 
 # OS files
 .DS_Store

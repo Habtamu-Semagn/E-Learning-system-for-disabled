@@ -123,6 +123,254 @@ router.post('/', authenticateToken, checkRole('teacher', 'admin'), [
   }
 });
 
+// Update quiz (Teacher and Admin only)
+router.put('/:id', authenticateToken, checkRole('teacher', 'admin'), [
+  body('title').optional().trim().notEmpty()
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
+  const { id } = req.params;
+  const { title, description, passingScore, timeLimitMinutes } = req.body;
+
+  try {
+    // Check course ownership for teachers
+    if (req.user.role === 'teacher') {
+      const ownerCheck = await pool.query(
+        `SELECT c.teacher_id FROM courses c
+         JOIN quizzes q ON c.id = q.course_id
+         WHERE q.id = $1`,
+        [id]
+      );
+      if (ownerCheck.rows.length === 0 || ownerCheck.rows[0].teacher_id !== req.user.id) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    }
+
+    const result = await pool.query(
+      `UPDATE quizzes 
+       SET title = COALESCE($1, title),
+           description = COALESCE($2, description),
+           passing_score = COALESCE($3, passing_score),
+           time_limit_minutes = COALESCE($4, time_limit_minutes)
+       WHERE id = $5
+       RETURNING *`,
+      [title, description, passingScore, timeLimitMinutes, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Quiz not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Update quiz error:', error);
+    res.status(500).json({ error: 'Failed to update quiz' });
+  }
+});
+
+// Delete quiz (Teacher and Admin only)
+router.delete('/:id', authenticateToken, checkRole('teacher', 'admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check course ownership for teachers
+    if (req.user.role === 'teacher') {
+      const ownerCheck = await pool.query(
+        `SELECT c.teacher_id FROM courses c
+         JOIN quizzes q ON c.id = q.course_id
+         WHERE q.id = $1`,
+        [id]
+      );
+      if (ownerCheck.rows.length === 0 || ownerCheck.rows[0].teacher_id !== req.user.id) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    }
+
+    const result = await pool.query('DELETE FROM quizzes WHERE id = $1 RETURNING id', [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Quiz not found' });
+    }
+
+    res.json({ message: 'Quiz deleted successfully' });
+  } catch (error) {
+    console.error('Delete quiz error:', error);
+    res.status(500).json({ error: 'Failed to delete quiz' });
+  }
+});
+
+// Add question to quiz (Teacher and Admin only)
+router.post('/:id/questions', authenticateToken, checkRole('teacher', 'admin'), [
+  body('questionText').trim().notEmpty(),
+  body('questionType').isIn(['multiple_choice', 'true_false', 'short_answer']),
+  body('orderIndex').isInt()
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
+  const { id } = req.params;
+  const { questionText, questionType, points, orderIndex, options } = req.body;
+
+  try {
+    // Check course ownership for teachers
+    if (req.user.role === 'teacher') {
+      const ownerCheck = await pool.query(
+        `SELECT c.teacher_id FROM courses c
+         JOIN quizzes q ON c.id = q.course_id
+         WHERE q.id = $1`,
+        [id]
+      );
+      if (ownerCheck.rows.length === 0 || ownerCheck.rows[0].teacher_id !== req.user.id) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    }
+
+    // Create question
+    const questionResult = await pool.query(
+      `INSERT INTO quiz_questions (quiz_id, question_text, question_type, points, order_index)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [id, questionText, questionType, points || 1, orderIndex]
+    );
+
+    const question = questionResult.rows[0];
+
+    // Add options if provided
+    if (options && Array.isArray(options)) {
+      for (let i = 0; i < options.length; i++) {
+        const option = options[i];
+        await pool.query(
+          `INSERT INTO quiz_options (question_id, option_text, is_correct, order_index)
+           VALUES ($1, $2, $3, $4)`,
+          [question.id, option.text, option.isCorrect || false, i]
+        );
+      }
+
+      // Get question with options
+      const optionsResult = await pool.query(
+        'SELECT * FROM quiz_options WHERE question_id = $1 ORDER BY order_index ASC',
+        [question.id]
+      );
+      question.options = optionsResult.rows;
+    }
+
+    res.status(201).json(question);
+  } catch (error) {
+    console.error('Add question error:', error);
+    res.status(500).json({ error: 'Failed to add question' });
+  }
+});
+
+// Update question (Teacher and Admin only)
+router.put('/questions/:questionId', authenticateToken, checkRole('teacher', 'admin'), [
+  body('questionText').optional().trim().notEmpty()
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
+  const { questionId } = req.params;
+  const { questionText, points, options } = req.body;
+
+  try {
+    // Check course ownership for teachers
+    if (req.user.role === 'teacher') {
+      const ownerCheck = await pool.query(
+        `SELECT c.teacher_id FROM courses c
+         JOIN quizzes q ON c.id = q.course_id
+         JOIN quiz_questions qq ON q.id = qq.quiz_id
+         WHERE qq.id = $1`,
+        [questionId]
+      );
+      if (ownerCheck.rows.length === 0 || ownerCheck.rows[0].teacher_id !== req.user.id) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    }
+
+    // Update question
+    const result = await pool.query(
+      `UPDATE quiz_questions 
+       SET question_text = COALESCE($1, question_text),
+           points = COALESCE($2, points)
+       WHERE id = $3
+       RETURNING *`,
+      [questionText, points, questionId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+
+    const question = result.rows[0];
+
+    // Update options if provided
+    if (options && Array.isArray(options)) {
+      // Delete existing options
+      await pool.query('DELETE FROM quiz_options WHERE question_id = $1', [questionId]);
+
+      // Add new options
+      for (let i = 0; i < options.length; i++) {
+        const option = options[i];
+        await pool.query(
+          `INSERT INTO quiz_options (question_id, option_text, is_correct, order_index)
+           VALUES ($1, $2, $3, $4)`,
+          [questionId, option.text, option.isCorrect || false, i]
+        );
+      }
+
+      // Get updated options
+      const optionsResult = await pool.query(
+        'SELECT * FROM quiz_options WHERE question_id = $1 ORDER BY order_index ASC',
+        [questionId]
+      );
+      question.options = optionsResult.rows;
+    }
+
+    res.json(question);
+  } catch (error) {
+    console.error('Update question error:', error);
+    res.status(500).json({ error: 'Failed to update question' });
+  }
+});
+
+// Delete question (Teacher and Admin only)
+router.delete('/questions/:questionId', authenticateToken, checkRole('teacher', 'admin'), async (req, res) => {
+  try {
+    const { questionId } = req.params;
+
+    // Check course ownership for teachers
+    if (req.user.role === 'teacher') {
+      const ownerCheck = await pool.query(
+        `SELECT c.teacher_id FROM courses c
+         JOIN quizzes q ON c.id = q.course_id
+         JOIN quiz_questions qq ON q.id = qq.quiz_id
+         WHERE qq.id = $1`,
+        [questionId]
+      );
+      if (ownerCheck.rows.length === 0 || ownerCheck.rows[0].teacher_id !== req.user.id) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    }
+
+    const result = await pool.query('DELETE FROM quiz_questions WHERE id = $1 RETURNING id', [questionId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+
+    res.json({ message: 'Question deleted successfully' });
+  } catch (error) {
+    console.error('Delete question error:', error);
+    res.status(500).json({ error: 'Failed to delete question' });
+  }
+});
+
 // Submit quiz attempt (Student only)
 router.post('/:id/attempt', authenticateToken, checkRole('student'), async (req, res) => {
   try {

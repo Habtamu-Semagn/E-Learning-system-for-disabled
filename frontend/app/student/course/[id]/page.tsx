@@ -22,6 +22,20 @@ const getVideoUrl = (videoPath: string | null | undefined): string | undefined =
   const baseUrl = API_BASE_URL.replace(/\/api$/, '');
   return `${baseUrl}${videoPath}`;
 };
+
+// Helper to construct full subtitle URL from backend path
+const getSubtitleUrl = (subtitlePath: string | null | undefined): string | undefined => {
+  if (!subtitlePath) return undefined;
+  // If it's already a full URL, return as-is
+  if (subtitlePath.startsWith('http://') || subtitlePath.startsWith('https://')) {
+    return subtitlePath;
+  }
+  // Otherwise, prepend the backend base URL (remove /api suffix)
+  const baseUrl = API_BASE_URL.replace(/\/api$/, '');
+  const fullUrl = `${baseUrl}${subtitlePath}`;
+  console.log('Constructed subtitle URL:', fullUrl, 'from path:', subtitlePath);
+  return fullUrl;
+};
 import { Badge } from '@/components/ui/badge';
 import { KeyboardShortcutsHelp } from '@/components/keyboard-shortcuts-help';
 import { coursesAPI, progressAPI } from '@/lib/api';
@@ -35,7 +49,8 @@ import {
   Circle,
   Loader2,
   AlertCircle,
-  BookOpen
+  BookOpen,
+  ArrowLeft
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
@@ -62,8 +77,19 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
       setCourse(courseData);
       setLessons(courseData.lessons || []);
 
+      // Debug logging for subtitle data
+      console.log('=== COURSE DATA DEBUG ===');
+      console.log('Course data:', courseData);
+      console.log('Lessons with subtitle info:', courseData.lessons?.map((lesson: any) => ({
+        id: lesson.id,
+        title: lesson.title,
+        video_url: lesson.video_url,
+        subtitle_url: lesson.subtitle_url
+      })));
+
       if (courseData.lessons && courseData.lessons.length > 0) {
         setCurrentLesson(courseData.lessons[0]);
+        console.log('First lesson set as current:', courseData.lessons[0]);
       }
 
       if (courseData.is_enrolled) {
@@ -193,6 +219,19 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
             </div>
           ) : (
             <>
+              {/* Back Button */}
+              <div className="flex items-center">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => router.push('/student/courses')}
+                  className="text-gray-600 hover:text-gray-900 -ml-2"
+                  aria-label="Back to courses"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+              </div>
+
               {/* Course Header */}
               <div className="space-y-2">
                 <Badge className="bg-blue-100 text-blue-700 border-0">
@@ -230,6 +269,7 @@ export default function CourseDetailPage({ params: paramsPromise }: { params: Pr
                         key={currentLesson.id} 
                         title={currentLesson.title} 
                         src={getVideoUrl(currentLesson.video_url)} 
+                        subtitleSrc={getSubtitleUrl(currentLesson.subtitle_url)}
                       />
                     )}
 

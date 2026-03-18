@@ -6,11 +6,12 @@ import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Volume2, Keyboard } from 'lucide-react';
+import { Volume2, Keyboard, CheckCircle, XCircle } from 'lucide-react';
 
 interface QuizOption {
   id: number;
   text: string;
+  is_correct?: boolean;
 }
 
 interface QuizCardProps {
@@ -34,11 +35,15 @@ export function QuizCard({
 }: QuizCardProps) {
   const [selectedAnswer, setSelectedAnswer] = useState<string>(initialAnswer);
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
+  const [answerFeedback, setAnswerFeedback] = useState<'correct' | 'incorrect' | null>(null);
+  const [showFeedback, setShowFeedback] = useState(false);
   const questionRef = useRef<HTMLDivElement>(null);
 
   // Update selected answer when question changes
   useEffect(() => {
     setSelectedAnswer(initialAnswer);
+    setAnswerFeedback(null);
+    setShowFeedback(false);
   }, [initialAnswer, questionNumber]);
 
   // Focus on question when it changes for screen readers
@@ -56,6 +61,7 @@ export function QuizCard({
         const index = parseInt(e.key) - 1;
         if (index < options.length) {
           setSelectedAnswer(options[index].id.toString());
+          setShowFeedback(false);
         }
         return;
       }
@@ -65,21 +71,22 @@ export function QuizCard({
         const index = keyLower.charCodeAt(0) - 'a'.charCodeAt(0);
         if (index < options.length) {
           setSelectedAnswer(options[index].id.toString());
+          setShowFeedback(false);
         }
         return;
       }
 
       // Enter to submit
-      if (e.key === 'Enter' && selectedAnswer && onSubmit) {
+      if (e.key === 'Enter' && selectedAnswer) {
         e.preventDefault();
-        onSubmit(selectedAnswer);
+        handleSubmitWithFeedback();
         return;
       }
 
       // Arrow keys for navigation
-      if (e.key === 'ArrowRight' && selectedAnswer && onSubmit) {
+      if (e.key === 'ArrowRight' && selectedAnswer) {
         e.preventDefault();
-        onSubmit(selectedAnswer);
+        handleSubmitWithFeedback();
         return;
       }
 
@@ -124,9 +131,68 @@ export function QuizCard({
     }
   };
 
+  // Audio feedback function for accessibility
+  const playAudioFeedback = (isCorrect: boolean) => {
+    if ('speechSynthesis' in window) {
+      // Cancel any ongoing speech
+      window.speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance();
+      utterance.text = isCorrect ? 'Correct answer!' : 'Incorrect answer. You failed this question.';
+      utterance.rate = 1.0;
+      utterance.pitch = isCorrect ? 1.2 : 0.8;
+      utterance.volume = 1;
+
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  // Check if the selected answer is correct
+  const checkAnswer = (answerId: string): boolean => {
+    const selectedOption = options.find(opt => opt.id.toString() === answerId);
+    return selectedOption?.is_correct === true;
+  };
+
+  // Handle submit with immediate feedback
+  const handleSubmitWithFeedback = () => {
+    if (!selectedAnswer) return;
+
+    const isCorrect = checkAnswer(selectedAnswer);
+    setAnswerFeedback(isCorrect ? 'correct' : 'incorrect');
+    setShowFeedback(true);
+
+    // Play audio feedback for accessibility
+    playAudioFeedback(isCorrect);
+
+    // Announce result to screen readers
+    const announcement = isCorrect 
+      ? 'Correct answer selected' 
+      : 'Incorrect answer selected. You failed this question.';
+    
+    // Create a temporary element for screen reader announcement
+    const announcer = document.createElement('div');
+    announcer.setAttribute('aria-live', 'assertive');
+    announcer.setAttribute('aria-atomic', 'true');
+    announcer.className = 'sr-only';
+    announcer.textContent = announcement;
+    document.body.appendChild(announcer);
+    
+    // Remove the announcer after a short delay
+    setTimeout(() => {
+      document.body.removeChild(announcer);
+    }, 1000);
+
+    // Proceed to next question after a short delay to allow feedback to be heard
+    setTimeout(() => {
+      if (onSubmit) {
+        onSubmit(selectedAnswer);
+      }
+    }, 2000); // 2 second delay to allow audio feedback to complete
+  };
+
   const handleSubmit = () => {
-    if (selectedAnswer && onSubmit) {
-      onSubmit(selectedAnswer);
+    if (selectedAnswer) {
+      handleSubmitWithFeedback();
     }
   };
 
@@ -171,6 +237,28 @@ export function QuizCard({
       </CardHeader>
 
       <CardContent className="space-y-6">
+        {/* Answer Feedback */}
+        {showFeedback && answerFeedback && (
+          <div className={`rounded-lg p-4 border-2 ${
+            answerFeedback === 'correct' 
+              ? 'bg-green-50 border-green-200' 
+              : 'bg-red-50 border-red-200'
+          }`}>
+            <div className="flex items-center gap-2">
+              {answerFeedback === 'correct' ? (
+                <CheckCircle className="h-5 w-5 text-green-600" />
+              ) : (
+                <XCircle className="h-5 w-5 text-red-600" />
+              )}
+              <span className={`font-medium ${
+                answerFeedback === 'correct' ? 'text-green-800' : 'text-red-800'
+              }`}>
+                {answerFeedback === 'correct' ? 'Correct Answer!' : 'Incorrect Answer - You Failed This Question'}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Keyboard Help Panel */}
         {showKeyboardHelp && (
           <div className="rounded-lg bg-blue-50 p-4 space-y-2 border border-blue-200">
@@ -209,7 +297,10 @@ export function QuizCard({
         {/* Options */}
         <RadioGroup
           value={selectedAnswer}
-          onValueChange={setSelectedAnswer}
+          onValueChange={(value) => {
+            setSelectedAnswer(value);
+            setShowFeedback(false);
+          }}
           className="space-y-3"
         >
           {options.map((option, index) => {

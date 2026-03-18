@@ -260,6 +260,7 @@ export const lessonsAPI = {
     description?: string;
     content?: string;
     videoFile?: File | null;
+    subtitleFile?: File | null;
     orderIndex: number;
     durationMinutes?: number;
   }) => {
@@ -271,6 +272,7 @@ export const lessonsAPI = {
     if (data.content) formData.append('content', data.content);
     if (data.durationMinutes !== undefined) formData.append('durationMinutes', String(data.durationMinutes));
     if (data.videoFile) formData.append('video', data.videoFile);
+    if (data.subtitleFile) formData.append('subtitle', data.subtitleFile);
     return apiRequestFormData('/lessons', formData, 'POST');
   },
 
@@ -279,6 +281,7 @@ export const lessonsAPI = {
     description?: string;
     content?: string;
     videoFile?: File | null;
+    subtitleFile?: File | null;
     orderIndex?: number;
     durationMinutes?: number;
   }) => {
@@ -289,6 +292,7 @@ export const lessonsAPI = {
     if (data.orderIndex !== undefined) formData.append('orderIndex', String(data.orderIndex));
     if (data.durationMinutes !== undefined) formData.append('durationMinutes', String(data.durationMinutes));
     if (data.videoFile) formData.append('video', data.videoFile);
+    if (data.subtitleFile) formData.append('subtitle', data.subtitleFile);
     return apiRequestFormData(`/lessons/${id}`, formData, 'PUT');
   },
 
@@ -350,6 +354,34 @@ export const quizzesAPI = {
     apiRequest('/quizzes', {
       method: 'POST',
       body: JSON.stringify(data),
+    }),
+
+  update: (id: number, data: any) =>
+    apiRequest(`/quizzes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: number) =>
+    apiRequest(`/quizzes/${id}`, {
+      method: 'DELETE',
+    }),
+
+  addQuestion: (quizId: number, data: any) =>
+    apiRequest(`/quizzes/${quizId}/questions`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateQuestion: (questionId: number, data: any) =>
+    apiRequest(`/quizzes/questions/${questionId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  deleteQuestion: (questionId: number) =>
+    apiRequest(`/quizzes/questions/${questionId}`, {
+      method: 'DELETE',
     }),
 
   submitAttempt: (id: number, answers: any) =>

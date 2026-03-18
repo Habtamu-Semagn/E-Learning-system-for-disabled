@@ -23,6 +23,7 @@ interface Lesson {
   order: number;
   description?: string;
   video_url?: string;
+  subtitle_url?: string;
 }
 
 interface EditLessonDialogProps {
@@ -38,6 +39,7 @@ export function EditLessonDialog({ lesson, open, onOpenChange, onSave }: EditLes
   const [order, setOrder] = useState(1);
   const [description, setDescription] = useState('');
   const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [subtitleFile, setSubtitleFile] = useState<File | null>(null);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -48,6 +50,7 @@ export function EditLessonDialog({ lesson, open, onOpenChange, onSave }: EditLes
       setOrder(lesson.order);
       setDescription(lesson.description || '');
       setVideoFile(null);
+      setSubtitleFile(null);
       setError('');
     }
   }, [lesson]);
@@ -57,9 +60,20 @@ export function EditLessonDialog({ lesson, open, onOpenChange, onSave }: EditLes
     setVideoFile(file);
   };
 
+  const handleSubtitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    setSubtitleFile(file);
+  };
+
   const clearVideo = () => {
     setVideoFile(null);
     const input = document.getElementById('edit-video') as HTMLInputElement;
+    if (input) input.value = '';
+  };
+
+  const clearSubtitle = () => {
+    setSubtitleFile(null);
+    const input = document.getElementById('edit-subtitle') as HTMLInputElement;
     if (input) input.value = '';
   };
 
@@ -77,6 +91,7 @@ export function EditLessonDialog({ lesson, open, onOpenChange, onSave }: EditLes
         orderIndex: order,
         durationMinutes: parseInt(duration) || 0,
         videoFile: videoFile ?? null,
+        subtitleFile: subtitleFile ?? null,
       });
 
       onSave({
@@ -86,6 +101,7 @@ export function EditLessonDialog({ lesson, open, onOpenChange, onSave }: EditLes
         order: data.order_index,
         description: data.description || '',
         video_url: data.video_url || '',
+        subtitle_url: data.subtitle_url || '',
       });
 
       onOpenChange(false);
@@ -102,6 +118,11 @@ export function EditLessonDialog({ lesson, open, onOpenChange, onSave }: EditLes
   // Extract filename from existing video_url for display
   const existingVideoName = lesson.video_url
     ? lesson.video_url.split('/').pop()
+    : null;
+
+  // Extract filename from existing subtitle_url for display
+  const existingSubtitleName = lesson.subtitle_url
+    ? lesson.subtitle_url.split('/').pop()
     : null;
 
   return (
@@ -205,6 +226,48 @@ export function EditLessonDialog({ lesson, open, onOpenChange, onSave }: EditLes
                 </label>
               )}
               <p className="text-xs text-gray-400">Accepted formats: MP4, WebM, MOV, AVI (max 500 MB)</p>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-subtitle">Subtitles/Captions</Label>
+              {/* Show existing subtitle if present and no new file selected */}
+              {existingSubtitleName && !subtitleFile && (
+                <div className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-200 rounded-md mb-1">
+                  <Video className="h-4 w-4 text-blue-500 shrink-0" aria-hidden="true" />
+                  <span className="text-sm text-blue-700 truncate flex-1">Current: {existingSubtitleName}</span>
+                </div>
+              )}
+              {subtitleFile ? (
+                <div className="flex items-center gap-2 p-2 bg-gray-50 border rounded-md">
+                  <Upload className="h-4 w-4 text-gray-500 shrink-0" aria-hidden="true" />
+                  <span className="text-sm text-gray-700 truncate flex-1">{subtitleFile.name}</span>
+                  <button
+                    type="button"
+                    onClick={clearSubtitle}
+                    className="text-gray-400 hover:text-gray-600"
+                    aria-label="Remove selected subtitle file"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <label
+                  htmlFor="edit-subtitle"
+                  className="flex items-center gap-2 p-2 border border-dashed rounded-md cursor-pointer hover:bg-gray-50 transition-colors"
+                >
+                  <Upload className="h-4 w-4 text-gray-400" aria-hidden="true" />
+                  <span className="text-sm text-gray-500">
+                    {existingSubtitleName ? 'Click to replace subtitle file' : 'Click to upload a subtitle file'}
+                  </span>
+                  <Input
+                    id="edit-subtitle"
+                    type="file"
+                    accept=".vtt"
+                    className="hidden"
+                    onChange={handleSubtitleChange}
+                  />
+                </label>
+              )}
+              <p className="text-xs text-gray-400">Accepted format: VTT (WebVTT) files for accessibility</p>
             </div>
           </div>
           <DialogFooter>
