@@ -65,7 +65,7 @@ export default function StudentDashboard() {
   };
 
   const stats = statsData ? [
-    { title: 'Enrolled Courses', value: statsData.enrolledCourses?.toString() || '0', icon: BookOpen, color: 'blue' },
+    { title: 'Enrolled Courses', value: statsData.enrolledCourses?.toString() || '0', icon: BookOpen, color: 'yellow' },
     { title: 'Completed', value: statsData.completedCourses?.toString() || '0', icon: Award, color: 'green' },
     { title: 'Avg. Progress', value: statsData.avgProgress || '0%', icon: TrendingUp, color: 'purple' },
     { title: 'Est. Hours', value: statsData.totalHours?.toString() || '0', icon: Clock, color: 'orange' },
@@ -151,7 +151,7 @@ export default function StudentDashboard() {
 
           {loading ? (
             <div className="flex justify-center py-20">
-              <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+              <Loader2 className="h-10 w-10 animate-spin text-yellow-400" />
             </div>
           ) : (
             <>
@@ -161,7 +161,7 @@ export default function StudentDashboard() {
                 {stats.map((stat) => {
                   const Icon = stat.icon;
                   const colorClasses = {
-                    blue: 'bg-blue-500',
+                    yellow: 'bg-yellow-400',
                     green: 'bg-green-500',
                     purple: 'bg-purple-500',
                     orange: 'bg-orange-500',
@@ -198,7 +198,7 @@ export default function StudentDashboard() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-blue-600 hover:text-blue-700"
+                    className="text-yellow-600 hover:text-yellow-700"
                     onClick={() => router.push('/student/courses')}
                   >
                     View all
@@ -224,7 +224,7 @@ export default function StudentDashboard() {
                       <p className="text-gray-600 font-medium">No courses enrolled yet</p>
                       <Button
                         variant="link"
-                        className="text-blue-600 mt-2"
+                        className="text-yellow-600 mt-2"
                         onClick={() => router.push('/student/courses')}
                       >
                         Browse available courses

@@ -122,12 +122,6 @@ export function useCommonShortcuts(role: 'student' | 'teacher' | 'admin') {
         description: 'Go to Courses',
       },
       {
-        key: 'r',
-        alt: true,
-        action: () => router.push('/admin/approvals'),
-        description: 'Go to Approvals',
-      },
-      {
         key: 'f',
         alt: true,
         action: () => router.push('/admin/feedback'),
@@ -161,7 +155,6 @@ Alt+U - Upload
 Alt+A - Accessibility`,
     admin: `Alt+U - Users
 Alt+C - Courses
-Alt+R - Approvals
 Alt+F - Feedback
 Alt+S - System`,
   };

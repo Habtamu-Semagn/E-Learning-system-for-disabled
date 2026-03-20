@@ -56,7 +56,6 @@ vi.mock('@/lib/api', () => ({
     getAttempts: vi.fn(),
     getRecentAttempts: vi.fn(),
   },
-  approvalsAPI: { getPending: vi.fn(), getAll: vi.fn() },
   storeAuth: vi.fn(),
   clearAuth: vi.fn(),
   getStoredUser: vi.fn(),

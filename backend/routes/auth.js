@@ -54,6 +54,13 @@ router.post('/login', loginLimiter, [
     const token = generateToken(user);
     delete user.password_hash;
 
+    // Log successful login
+    await pool.query(
+      `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details, ip_address)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [user.id, 'LOGIN', 'user', user.id, JSON.stringify({ email: user.email, role: user.role }), req.ip]
+    );
+
     // Set httpOnly cookie
     res.cookie('token', token, {
       httpOnly: true,
@@ -71,6 +78,8 @@ router.post('/login', loginLimiter, [
 
 // Logout - clear cookie
 router.post('/logout', (req, res) => {
+  // Note: We can't easily get user_id here without authenticateToken middleware
+  // If you want to log logouts, add authenticateToken middleware to this route
   res.clearCookie('token', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -147,6 +156,13 @@ router.post('/signup', [
       user: result.rows[0],
       token: generateToken(result.rows[0]),
     };
+
+    // Log successful registration
+    await pool.query(
+      `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details, ip_address)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [result.rows[0].id, 'REGISTER', 'user', result.rows[0].id, JSON.stringify({ email, role, fullName }), req.ip]
+    );
 
     res.status(201).json(responseData);
   } catch (error) {

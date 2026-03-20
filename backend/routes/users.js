@@ -131,6 +131,14 @@ router.post('/', authenticateToken, checkRole('admin'), [
     }
 
     const result = await pool.query(query, params);
+
+    // Log user creation
+    await pool.query(
+      `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details, ip_address)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [req.user.id, 'CREATE_USER', 'user', result.rows[0].id, JSON.stringify({ email, role, fullName }), req.ip]
+    );
+
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Create user error:', error);
@@ -194,6 +202,13 @@ router.put('/:id', authenticateToken, [
       return res.status(404).json({ error: 'User not found' });
     }
 
+    // Log user update
+    await pool.query(
+      `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details, ip_address)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [req.user.id, 'UPDATE_USER', 'user', id, JSON.stringify({ fullName, department, bio, phone, passwordChanged: !!newPassword }), req.ip]
+    );
+
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Update user error:', error);
@@ -206,10 +221,22 @@ router.delete('/:id', authenticateToken, checkRole('admin'), async (req, res) =>
   try {
     const { id } = req.params;
 
+    // Get user info before deletion for audit log
+    const userInfo = await pool.query('SELECT email, full_name, role FROM users WHERE id = $1', [id]);
+    
     const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING id', [id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Log user deletion
+    if (userInfo.rows.length > 0) {
+      await pool.query(
+        `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details, ip_address)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [req.user.id, 'DELETE_USER', 'user', id, JSON.stringify({ email: userInfo.rows[0].email, fullName: userInfo.rows[0].full_name, role: userInfo.rows[0].role }), req.ip]
+      );
     }
 
     res.json({ message: 'User deleted successfully' });

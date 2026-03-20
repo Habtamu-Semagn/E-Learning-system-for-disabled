@@ -209,18 +209,16 @@ export default function UploadPage() {
     <RouteGuard allowedRoles={['teacher']}>
       <DashboardLayout role="teacher" userName={user?.full_name || 'Teacher'} userRole="Teacher">
         <KeyboardShortcutsHelp shortcuts={keyboardShortcuts} />
-        <div className="min-h-screen bg-gray-50">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="space-y-8">
-              {/* Header */}
-              <div className="text-center">
-                <h1 className="text-3xl font-bold text-gray-900">Course & Lesson Upload</h1>
-                <p className="text-gray-600 mt-2">Create a new course or add lessons to an existing one</p>
-              </div>
+        <div className="space-y-8">
+          {/* Header */}
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Course & Lesson Upload</h1>
+            <p className="text-gray-600 mt-2">Create a new course or add lessons to an existing one</p>
+          </div>
 
-              {/* Tab switcher */}
-              <div className="flex justify-center">
-                <div className="flex gap-2 border-b border-gray-200 bg-white rounded-t-lg px-4" role="tablist">
+          {/* Tab switcher */}
+          <div>
+            <div className="flex gap-2 border-b border-gray-200 bg-white rounded-t-lg px-4 w-fit" role="tablist">
                   <button
                     type="button"
                     role="tab"
@@ -256,10 +254,10 @@ export default function UploadPage() {
 
         {/* ── CREATE COURSE TAB ── */}
         {activeTab === 'create-course' && (
-          <div className="max-w-2xl mx-auto">
+          <div>
             <Card className="shadow-lg">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-center justify-center">
+                <CardTitle className="flex items-center gap-2">
                   <PlusCircle className="h-5 w-5 text-blue-600" aria-hidden="true" />
                   New Course
                 </CardTitle>
@@ -353,12 +351,11 @@ export default function UploadPage() {
                     <Button
                       type="button"
                       variant="outline"
-                      className="flex-1"
                       onClick={() => router.push('/teacher/dashboard')}
                     >
                       Cancel
                     </Button>
-                    <Button type="submit" className="flex-1" disabled={courseSubmitting}>
+                    <Button type="submit" disabled={courseSubmitting}>
                       {courseSubmitting ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -377,10 +374,10 @@ export default function UploadPage() {
 
         {/* ── ADD LESSON TAB ── */}
         {activeTab === 'add-lesson' && (
-          <div className="max-w-2xl mx-auto">
+          <div>
             <Card className="shadow-lg">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-center justify-center">
+                <CardTitle className="flex items-center gap-2">
                   <FileVideo className="h-5 w-5 text-blue-600" aria-hidden="true" />
                   Add Lesson
                 </CardTitle>
@@ -502,12 +499,11 @@ export default function UploadPage() {
                     <Button
                       type="button"
                       variant="outline"
-                      className="flex-1"
                       onClick={() => router.push('/teacher/dashboard')}
                     >
                       Cancel
                     </Button>
-                    <Button type="submit" className="flex-1" disabled={lessonSubmitting}>
+                    <Button type="submit" disabled={lessonSubmitting}>
                       {lessonSubmitting ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -525,10 +521,10 @@ export default function UploadPage() {
         )}
 
         {/* Tips card */}
-        <div className="max-w-2xl mx-auto">
+        <div>
           <Card className="bg-blue-50 border-blue-200 shadow-lg">
             <CardHeader>
-              <CardTitle className="text-blue-900 text-base text-center">Tips</CardTitle>
+              <CardTitle className="text-blue-900 text-base">Tips</CardTitle>
             </CardHeader>
             <CardContent>
               <ul className="space-y-2 text-blue-800 text-sm" role="list">
@@ -541,8 +537,6 @@ export default function UploadPage() {
           </Card>
         </div>
       </div>
-    </div>
-  </div>
 </DashboardLayout>
 </RouteGuard>
 );

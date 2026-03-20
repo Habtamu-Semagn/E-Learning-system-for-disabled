@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/dashboard-layout-new';
 import { RouteGuard } from '@/lib/route-guard';
 import { useAuth } from '@/lib/auth-context';
-import { lessonsAPI, coursesAPI } from '@/lib/api';
+import { lessonsAPI, coursesAPI, feedbackAPI } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -36,6 +36,8 @@ interface Material {
   hasVideo: boolean;
   hasDescription: boolean;
   accessibilityScore: number;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  issueType: string;
   issues: {
     critical: number;
     warning: number;
@@ -43,7 +45,16 @@ interface Material {
   };
 }
 
-function scoreMaterial(lesson: any, courseTitle: string): Material {
+interface AccessibilityReport {
+  id: number;
+  subject: string;
+  category: string;
+  priority: string;
+  status: string;
+  created_at: string;
+}
+
+function scoreMaterial(lesson: any, courseTitle: string, reports: AccessibilityReport[]): Material {
   const hasVideo = !!lesson.video_url;
   const hasDescription = !!(lesson.description && lesson.description.trim().length > 10);
   const hasTitle = !!(lesson.title && lesson.title.trim().length > 3);
@@ -64,6 +75,36 @@ function scoreMaterial(lesson: any, courseTitle: string): Material {
   const total = passed + warning + critical;
   const score = total > 0 ? Math.round((passed / total) * 100) : 0;
 
+  // Determine priority based on score and critical issues
+  let priority: 'low' | 'medium' | 'high' | 'critical';
+  if (critical > 0) {
+    priority = 'critical';
+  } else if (score < 60) {
+    priority = 'high';
+  } else if (score < 80) {
+    priority = 'medium';
+  } else {
+    priority = 'low';
+  }
+
+  // Find related accessibility reports for this lesson
+  const lessonReports = reports.filter((report) => {
+    const subjectLower = report.subject.toLowerCase();
+    const lessonTitleLower = lesson.title.toLowerCase();
+    const courseTitleLower = courseTitle.toLowerCase();
+    return subjectLower.includes(lessonTitleLower) || 
+           (subjectLower.includes(courseTitleLower) && subjectLower.includes(lessonTitleLower));
+  });
+
+  // Extract issue type from the most recent report
+  let issueType = 'No Issues Reported';
+  if (lessonReports.length > 0) {
+    const latestReport = lessonReports[0];
+    // Extract issue type from subject (format: "Issue Type - Course: Lesson")
+    const match = latestReport.subject.match(/^([^-]+)/);
+    issueType = match ? match[1].trim() : 'Accessibility Issue';
+  }
+
   return {
     id: lesson.id,
     name: lesson.title,
@@ -75,6 +116,8 @@ function scoreMaterial(lesson: any, courseTitle: string): Material {
     hasVideo,
     hasDescription,
     accessibilityScore: score,
+    priority,
+    issueType,
     issues: { critical, warning, passed },
   };
 }
@@ -86,6 +129,7 @@ export default function TeacherAccessibilityPage() {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [accessibilityReports, setAccessibilityReports] = useState<AccessibilityReport[]>([]);
 
   useEffect(() => {
     if (user?.id) fetchMaterials(user.id);
@@ -95,6 +139,18 @@ export default function TeacherAccessibilityPage() {
     try {
       setLoading(true);
       setError('');
+      
+      // Fetch accessibility reports using teacher-specific endpoint
+      let reports: AccessibilityReport[] = [];
+      try {
+        const teacherFeedback = await feedbackAPI.getTeacherAccessibility();
+        reports = teacherFeedback;
+        setAccessibilityReports(reports);
+      } catch (err) {
+        console.error('Failed to fetch accessibility reports:', err);
+        // Continue even if reports fail to load
+      }
+
       const courses = await coursesAPI.getAll({ teacherId });
       const allMaterials: Material[] = [];
 
@@ -103,7 +159,7 @@ export default function TeacherAccessibilityPage() {
           try {
             const lessons = await lessonsAPI.getByCourse(course.id);
             lessons.forEach((lesson: any) => {
-              allMaterials.push(scoreMaterial(lesson, course.title));
+              allMaterials.push(scoreMaterial(lesson, course.title, reports));
             });
           } catch {
             // skip courses with no lessons
@@ -120,10 +176,15 @@ export default function TeacherAccessibilityPage() {
     }
   };
 
-  const getScoreBadge = (score: number) => {
-    if (score >= 80) return <Badge className="bg-green-600">Excellent</Badge>;
-    if (score >= 60) return <Badge className="bg-yellow-600">Good</Badge>;
-    return <Badge className="bg-red-600">Needs Improvement</Badge>;
+  const getPriorityBadge = (priority: string) => {
+    const colors: Record<string, string> = {
+      low: 'bg-gray-600',
+      medium: 'bg-blue-600',
+      high: 'bg-orange-600',
+      critical: 'bg-red-600',
+    };
+
+    return <Badge className={colors[priority] || colors.medium}>{priority.toUpperCase()}</Badge>;
   };
 
   const averageScore =
@@ -233,9 +294,8 @@ export default function TeacherAccessibilityPage() {
                           <TableHead>Type</TableHead>
                           <TableHead>Course</TableHead>
                           <TableHead>Upload Date</TableHead>
-                          <TableHead>Score</TableHead>
-                          <TableHead>Issues</TableHead>
-                          <TableHead>Rating</TableHead>
+                          <TableHead>Priority</TableHead>
+                          <TableHead>Issue Type</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -254,49 +314,10 @@ export default function TeacherAccessibilityPage() {
                             <TableCell className="capitalize">{material.type}</TableCell>
                             <TableCell>{material.course}</TableCell>
                             <TableCell>{material.uploadDate}</TableCell>
+                            <TableCell>{getPriorityBadge(material.priority)}</TableCell>
                             <TableCell>
-                              <div className="flex items-center gap-2">
-                                <div className="flex-1 bg-gray-200 rounded-full h-2 max-w-[100px]">
-                                  <div
-                                    className={`h-2 rounded-full ${
-                                      material.accessibilityScore >= 80
-                                        ? 'bg-green-600'
-                                        : material.accessibilityScore >= 60
-                                        ? 'bg-yellow-600'
-                                        : 'bg-red-600'
-                                    }`}
-                                    style={{ width: `${material.accessibilityScore}%` }}
-                                    role="progressbar"
-                                    aria-valuenow={material.accessibilityScore}
-                                    aria-valuemin={0}
-                                    aria-valuemax={100}
-                                    aria-label={`${material.accessibilityScore}% accessibility score`}
-                                  />
-                                </div>
-                                <span className="text-sm font-medium">{material.accessibilityScore}%</span>
-                              </div>
+                              <span className="text-sm text-gray-700">{material.issueType}</span>
                             </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                {material.issues.critical > 0 && (
-                                  <Badge variant="destructive" className="text-xs">
-                                    {material.issues.critical} Critical
-                                  </Badge>
-                                )}
-                                {material.issues.warning > 0 && (
-                                  <Badge className="bg-yellow-600 text-xs">
-                                    {material.issues.warning} Warning
-                                  </Badge>
-                                )}
-                                {material.issues.critical === 0 && material.issues.warning === 0 && (
-                                  <Badge className="bg-green-600 text-xs">
-                                    <CheckCircle className="h-3 w-3 mr-1" aria-hidden="true" />
-                                    All Passed
-                                  </Badge>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell>{getScoreBadge(material.accessibilityScore)}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>

@@ -28,12 +28,12 @@ router.get('/', authenticateToken, checkRole('admin'), async (req, res) => {
 
     if (startDate) {
       params.push(startDate);
-      where += ` AND a.created_at >= $${params.length}`;
+      where += ` AND a.created_at >= $${params.length}::date`;
     }
 
     if (endDate) {
       params.push(endDate);
-      where += ` AND a.created_at <= $${params.length}`;
+      where += ` AND a.created_at <= $${params.length}::date + interval '1 day'`;
     }
 
     const baseQuery = `SELECT a.*, u.full_name, u.email, u.role
@@ -127,12 +127,12 @@ router.get('/stats/summary', authenticateToken, checkRole('admin'), async (req, 
 
     if (startDate) {
       params.push(startDate);
-      dateFilter += ` AND created_at >= $${params.length}`;
+      dateFilter += ` AND created_at >= $${params.length}::date`;
     }
 
     if (endDate) {
       params.push(endDate);
-      dateFilter += ` AND created_at <= $${params.length}`;
+      dateFilter += ` AND created_at <= $${params.length}::date + interval '1 day'`;
     }
 
     const result = await pool.query(

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, 
   BookOpen, 
@@ -11,7 +11,6 @@ import {
   Users,
   GraduationCap,
   UserCircle,
-  Clock,
   Accessibility,
   MessageSquare,
   Activity,
@@ -29,6 +28,7 @@ import {
   SidebarFooter,
 } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
+import { useAuth } from '@/lib/auth-context';
 
 interface AppSidebarProps {
   role: 'student' | 'teacher' | 'admin';
@@ -45,6 +45,7 @@ const studentLinks: NavLink[] = [
   { href: '/student/courses', label: 'My Courses', icon: BookOpen },
   { href: '/student/progress', label: 'Progress', icon: TrendingUp },
   { href: '/student/quiz', label: 'Take Quiz', icon: FileQuestion },
+  { href: '/student/accessibility', label: 'Accessibility', icon: Accessibility },
   { href: '/student/profile', label: 'Profile', icon: UserCircle },
 ];
 
@@ -60,13 +61,14 @@ const adminLinks: NavLink[] = [
   { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/users', label: 'Users', icon: Users },
   { href: '/admin/courses', label: 'Courses', icon: GraduationCap },
-  { href: '/admin/approvals', label: 'Approvals', icon: Clock },
   { href: '/admin/feedback', label: 'Feedback', icon: MessageSquare },
   { href: '/admin/system', label: 'System Logs', icon: Activity },
 ];
 
 export function AppSidebar({ role }: AppSidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { logout } = useAuth();
   
   const links = role === 'student' ? studentLinks : role === 'teacher' ? teacherLinks : adminLinks;
   const roleColors = {
@@ -74,6 +76,11 @@ export function AppSidebar({ role }: AppSidebarProps) {
     teacher: { primary: 'bg-purple-600', light: 'bg-purple-50', text: 'text-purple-600' },
     admin: { primary: 'bg-slate-800', light: 'bg-slate-50', text: 'text-slate-800' },
   }[role];
+
+  const handleLogout = async () => {
+    await logout();
+    router.push('/auth/login');
+  };
 
   return (
     <Sidebar collapsible="icon" className="border-r border-gray-200">
@@ -143,7 +150,7 @@ export function AppSidebar({ role }: AppSidebarProps) {
               className="h-11 px-3 rounded-lg text-gray-700 hover:bg-red-50 hover:text-red-600 transition-all duration-200"
             >
               <button 
-                onClick={() => console.log('Logout clicked')}
+                onClick={handleLogout}
                 className="flex items-center gap-3 w-full"
               >
                 <LogOut className="h-5 w-5 flex-shrink-0" />

@@ -50,7 +50,6 @@ app.use('/api/', limiter);
 // Import routes
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
-const approvalRoutes = require('./routes/approvals');
 const courseRoutes = require('./routes/courses');
 const lessonRoutes = require('./routes/lessons');
 const enrollmentRoutes = require('./routes/enrollments');
@@ -63,7 +62,6 @@ const systemRoutes = require('./routes/system');
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/approvals', approvalRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/lessons', lessonRoutes);
 app.use('/api/enrollments', enrollmentRoutes);

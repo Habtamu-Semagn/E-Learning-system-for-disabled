@@ -40,6 +40,26 @@ router.get('/', authenticateToken, checkRole('admin'), async (req, res) => {
   }
 });
 
+// Get accessibility feedback for teacher's courses
+router.get('/teacher/accessibility', authenticateToken, checkRole('teacher'), async (req, res) => {
+  try {
+    // Get all accessibility feedback (teachers can see all to understand common issues)
+    const query = `
+      SELECT DISTINCT f.*, u.full_name, u.email, u.role
+      FROM feedback f
+      JOIN users u ON f.user_id = u.id
+      WHERE f.category = 'accessibility'
+      ORDER BY f.created_at DESC
+    `;
+
+    const result = await pool.query(query);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Get teacher accessibility feedback error:', error);
+    res.status(500).json({ error: 'Failed to fetch accessibility feedback' });
+  }
+});
+
 // Get user's feedback
 router.get('/user/:userId', authenticateToken, async (req, res) => {
   try {

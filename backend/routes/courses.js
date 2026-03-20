@@ -148,6 +148,13 @@ router.post('/', authenticateToken, checkRole('teacher', 'admin'), [
       [title, description, teacherId, category, difficultyLevel, thumbnailUrl || null]
     );
 
+    // Log course creation
+    await pool.query(
+      `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details, ip_address)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [req.user.id, 'CREATE_COURSE', 'course', result.rows[0].id, JSON.stringify({ title, category, difficultyLevel }), req.ip]
+    );
+
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Create course error:', error);
@@ -196,6 +203,13 @@ router.put('/:id', authenticateToken, checkRole('teacher', 'admin'), [
       return res.status(404).json({ error: 'Course not found' });
     }
 
+    // Log course update
+    await pool.query(
+      `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details, ip_address)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [req.user.id, 'UPDATE_COURSE', 'course', id, JSON.stringify({ title, category, difficultyLevel, status }), req.ip]
+    );
+
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Update course error:', error);
@@ -215,10 +229,22 @@ router.delete('/:id', authenticateToken, checkRole('teacher', 'admin'), async (r
       }
     }
 
+    // Get course info before deletion for audit log
+    const courseInfo = await pool.query('SELECT title, category FROM courses WHERE id = $1', [id]);
+
     const result = await pool.query('DELETE FROM courses WHERE id = $1 RETURNING id', [id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Course not found' });
+    }
+
+    // Log course deletion
+    if (courseInfo.rows.length > 0) {
+      await pool.query(
+        `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details, ip_address)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [req.user.id, 'DELETE_COURSE', 'course', id, JSON.stringify({ title: courseInfo.rows[0].title, category: courseInfo.rows[0].category }), req.ip]
+      );
     }
 
     res.json({ message: 'Course deleted successfully' });

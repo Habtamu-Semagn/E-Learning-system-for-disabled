@@ -189,25 +189,6 @@ export const usersAPI = {
     }),
 };
 
-// Approvals API
-export const approvalsAPI = {
-  getPending: () => apiRequest('/approvals/pending'),
-
-  getAll: (status?: string) =>
-    apiRequest(`/approvals${status ? `?status=${status}` : ''}`),
-
-  approve: (id: number) =>
-    apiRequest(`/approvals/${id}/approve`, {
-      method: 'POST',
-    }),
-
-  reject: (id: number, reason?: string) =>
-    apiRequest(`/approvals/${id}/reject`, {
-      method: 'POST',
-      body: JSON.stringify({ reason }),
-    }),
-};
-
 // Courses API
 export const coursesAPI = {
   getAll: (params?: {
@@ -401,6 +382,8 @@ export const feedbackAPI = {
     const query = new URLSearchParams(params as any).toString();
     return apiRequest(`/feedback${query ? `?${query}` : ''}`);
   },
+
+  getTeacherAccessibility: () => apiRequest('/feedback/teacher/accessibility'),
 
   getByUser: (userId: number) => apiRequest(`/feedback/user/${userId}`),
 

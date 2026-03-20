@@ -96,13 +96,14 @@ export default function AdminAuditLogPage() {
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
 
+      // Build stats params - only include dates if they have values
+      const statsParams: any = {};
+      if (startDate) statsParams.startDate = startDate;
+      if (endDate) statsParams.endDate = endDate;
+
       const [logsData, statsData] = await Promise.all([
         auditAPI.getAll(params),
-        auditAPI.getStats(
-          startDate || endDate
-            ? { startDate: startDate || undefined, endDate: endDate || undefined }
-            : undefined
-        ),
+        auditAPI.getStats(Object.keys(statsParams).length > 0 ? statsParams : undefined),
       ]);
 
       const mapped: AuditLog[] = logsData.map((log: any) => ({
@@ -312,15 +313,14 @@ export default function AdminAuditLogPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Actions</SelectItem>
-                      <SelectItem value="login">Login</SelectItem>
-                      <SelectItem value="logout">Logout</SelectItem>
-                      <SelectItem value="register">Register</SelectItem>
-                      <SelectItem value="create_course">Create Course</SelectItem>
-                      <SelectItem value="update_course">Update Course</SelectItem>
-                      <SelectItem value="delete_course">Delete Course</SelectItem>
-                      <SelectItem value="approve_user">Approve User</SelectItem>
-                      <SelectItem value="reject_user">Reject User</SelectItem>
-                      <SelectItem value="delete_user">Delete User</SelectItem>
+                      <SelectItem value="LOGIN">Login</SelectItem>
+                      <SelectItem value="REGISTER">Register</SelectItem>
+                      <SelectItem value="CREATE_USER">Create User</SelectItem>
+                      <SelectItem value="UPDATE_USER">Update User</SelectItem>
+                      <SelectItem value="DELETE_USER">Delete User</SelectItem>
+                      <SelectItem value="CREATE_COURSE">Create Course</SelectItem>
+                      <SelectItem value="UPDATE_COURSE">Update Course</SelectItem>
+                      <SelectItem value="DELETE_COURSE">Delete Course</SelectItem>
                     </SelectContent>
                   </Select>
 
@@ -405,19 +405,20 @@ export default function AdminAuditLogPage() {
                   No audit logs found matching your criteria.
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Timestamp</TableHead>
-                      <TableHead>User</TableHead>
-                      <TableHead>Action</TableHead>
-                      <TableHead>Entity Type</TableHead>
-                      <TableHead>Details</TableHead>
-                      <TableHead>IP Address</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredLogs.map(log => (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Timestamp</TableHead>
+                        <TableHead>User</TableHead>
+                        <TableHead>Action</TableHead>
+                        <TableHead>Entity Type</TableHead>
+                        <TableHead>Details</TableHead>
+                        <TableHead>IP Address</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredLogs.map(log => (
                       <TableRow key={log.id}>
                         <TableCell className="font-mono text-xs whitespace-nowrap">
                           {log.timestamp}
@@ -454,6 +455,7 @@ export default function AdminAuditLogPage() {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </CardContent>
           </Card>
