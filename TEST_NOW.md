@@ -37,7 +37,7 @@ Ready on http://localhost:3000
 2. **Sign up as student:**
    - Click "Sign up here"
    - Fill form:
-     - Name: Test Student
+     - Name: Test Studentt
      - Email: student@test.com
      - School ID: BDU12345 (must start with BDU!)
      - Password: test123

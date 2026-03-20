@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { Accessibility } from "lucide-react";
 
@@ -25,14 +26,13 @@ export default function PublicFooter() {
       <div className="container mx-auto max-w-7xl">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
           <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-yellow-400 rounded-lg flex items-center justify-center">
-                <Accessibility className="h-6 w-6 text-slate-950" aria-hidden="true" />
-              </div>
-              <span className={`${accessibilityMode === 'blind' ? 'text-2xl' : 'text-xl'} font-bold text-white`}>
-                EduAccess
-              </span>
-            </div>
+            <Image 
+              src="/logo.png" 
+              alt="EduAccess Logo" 
+              width={150}
+              height={50}
+              className={`${accessibilityMode === 'blind' ? 'h-14' : 'h-10'} w-auto`}
+            />
             <p className={`text-white/60 ${accessibilityMode === 'blind' ? 'text-lg' : 'text-base'}`}>
               Education without boundaries for everyone
             </p>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { 
@@ -55,7 +56,7 @@ export default function Home() {
   if (!mounted) return null;
 
   return (
-    <div className={`min-h-screen ${bgColor} text-white ${baseFontSize}`}>
+    <div className={`min-h-screen ${bgColor} text-white ${baseFontSize} font-sans`}>
       <div id="accessibility-announcements" className="sr-only" role="status" aria-live="polite" aria-atomic="true" />
 
       <a 
@@ -77,12 +78,14 @@ export default function Home() {
           <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
             {/* Logo and Brand */}
             <div className="flex items-center gap-3">
-              <div className={`w-12 h-12 bg-yellow-400 rounded-lg flex items-center justify-center ${visualCue}`}>
-                <Accessibility className="h-7 w-7 text-slate-950" aria-hidden="true" />
-              </div>
-              <span className={`${accessibilityMode === 'blind' ? 'text-3xl' : 'text-2xl'} font-bold tracking-tight`}>
-                EduAccess
-              </span>
+              <Image 
+                src="/logo.png" 
+                alt="EduAccess Logo" 
+                width={180}
+                height={60}
+                className={`${accessibilityMode === 'blind' ? 'h-16' : 'h-12'} w-auto ${visualCue}`}
+                priority
+              />
             </div>
 
             {/* Accessibility Mode Toggle */}
@@ -386,14 +389,13 @@ export default function Home() {
         <div className="container mx-auto max-w-7xl">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
             <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-yellow-400 rounded-lg flex items-center justify-center">
-                  <Accessibility className="h-6 w-6 text-slate-950" aria-hidden="true" />
-                </div>
-                <span className={`${accessibilityMode === 'blind' ? 'text-2xl' : 'text-xl'} font-bold`}>
-                  EduAccess
-                </span>
-              </div>
+              <Image 
+                src="/logo.png" 
+                alt="EduAccess Logo" 
+                width={150}
+                height={50}
+                className={`${accessibilityMode === 'blind' ? 'h-14' : 'h-10'} w-auto`}
+              />
               <p className={`text-white/60 ${accessibilityMode === 'blind' ? 'text-lg' : 'text-base'}`}>
                 Education without boundaries for everyone
               </p>

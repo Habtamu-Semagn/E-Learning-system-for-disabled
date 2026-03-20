@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Eye, Ear, Accessibility, Bell } from "lucide-react";
@@ -63,12 +64,14 @@ export default function PublicHeader() {
         <nav className="container mx-auto max-w-7xl px-6 lg:px-12 py-6" aria-label="Main navigation">
           <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
             <Link href="/" className="flex items-center gap-3">
-              <div className={`w-12 h-12 bg-yellow-400 rounded-lg flex items-center justify-center ${visualCue}`}>
-                <Accessibility className="h-7 w-7 text-slate-950" aria-hidden="true" />
-              </div>
-              <span className={`${accessibilityMode === 'blind' ? 'text-3xl' : 'text-2xl'} font-bold tracking-tight text-white`}>
-                EduAccess
-              </span>
+              <Image 
+                src="/logo.png" 
+                alt="EduAccess Logo" 
+                width={180}
+                height={60}
+                className={`${accessibilityMode === 'blind' ? 'h-16' : 'h-12'} w-auto ${visualCue}`}
+                priority
+              />
             </Link>
 
             <div className="flex items-center gap-3" role="region" aria-label="Accessibility mode selector">
